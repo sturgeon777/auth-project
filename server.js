@@ -85,6 +85,13 @@ const server = http.createServer((req, res) => {
                 hash: secureData.hash
             });
 
+            console.log("\n====== [백엔드 SERVER 신규 회원가입 처리] ======");
+            console.log(`요청 아이디: ${username}`);
+            console.log(`생성된 고유 Salt: ${secureData.salt}`);
+            console.log(`DB에 저장할 최종 해시: ${secureData.hash}`);
+            console.log("결과: 사용자 정보 객체 생성 및 배열 삽입 완료");
+            console.log("==============================================\n");
+
             try {
                 fs.writeFileSync(FILE_PATH, JSON.stringify(userDatabase, null, 4), 'utf-8');
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -112,18 +119,29 @@ const server = http.createServer((req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
 
             if (!user) {
+                console.log(`\n[로그인 실패] 존재하지 않는 아이디 요청: ${username}\n`);
                 return res.end(`<h3>로그인 실패: 아이디가 존재하지 않습니다.</h3><a href="/">돌아가기</a>`);
             }
 
             const verifyData = hashPasswordServerSide(password, user.salt);
 
+            console.log("\n====== [백엔드 SERVER 로그인 검증 시도] ======");
+            console.log(`조회된 아이디: ${username}`);
+            console.log(`불러온 고유 Salt: ${user.salt}`);
+            console.log(`DB에 원래 저장되어 있던 해시: ${user.hash}`);
+            console.log(`방금 입력한 비번으로 연산한 해시: ${verifyData.hash}`);
+
             if (verifyData.hash === user.hash) {
+                console.log("결과: 두 해시값 일치 -> 인증 완료");
+                console.log("==============================================\n");
                 res.end(`
                     <h1>로그인 성공</h1>
                     <p>어서오세요, ${username}님.</p>
                     <a href="/">돌아가기</a>
                 `);
             } else {
+                console.log("결과: 해시값 불일치 -> 인증 거부");
+                console.log("==============================================\n");
                 res.end(`<h3>로그인 실패: 비밀번호가 일치하지 않습니다.</h3><a href="/">돌아가기</a>`);
             }
         });
