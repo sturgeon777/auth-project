@@ -88,11 +88,10 @@ const server = http.createServer((req, res) => {
             try {
                 fs.writeFileSync(FILE_PATH, JSON.stringify(userDatabase, null, 4), 'utf-8');
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                // 수정된 부분: 회원가입 성공 메시지
                 res.end(`
                     <h1>회원가입 완료</h1>
                     <p>회원가입이 성공적으로 완료되었습니다.</p>
-                    <a href="/">로그인 페이지로 이동하기</a>
+                    <a href="/">돌아가기</a>
                 `);
             } catch (fileError) {
                 res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -119,19 +118,14 @@ const server = http.createServer((req, res) => {
             const verifyData = hashPasswordServerSide(password, user.salt);
 
             if (verifyData.hash === user.hash) {
-                // 수정된 부분: 로그인 성공 메시지
                 res.end(`
                     <h1>로그인 성공</h1>
                     <p>어서오세요, ${username}님.</p>
-                    <a href="/">돌아가기 (메인으로)</a>
+                    <a href="/">돌아가기</a>
                 `);
             } else {
                 res.end(`<h3>로그인 실패: 비밀번호가 일치하지 않습니다.</h3><a href="/">돌아가기</a>`);
             }
         });
     }
-});
-
-server.listen(3000, '0.0.0.0', () => {
-    console.log("http://localhost:3000 에서 실행 중입니다.");
 });
