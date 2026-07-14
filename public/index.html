@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8">
+<title></title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<h2>(가입/로그인)</h2>
+
+<!-- 회원가입 -->
+<div class="form-box">
+    <h3>1. 회원가입 </h3>
+    <form action="/register" method="POST">
+        <input type="text" name="username" placeholder="아이디 입력" required>
+        <input type="password" name="password" placeholder="비밀번호 입력" required>
+        <button type="submit" class="btn-reg">회원가입</button>
+    </form>
+</div>
+
+<!-- 로그인 -->
+<div class="form-box">
+    <h3>2. 로그인 </h3>
+    <form action="/login" method="POST">
+        <input type="text" name="username" placeholder="아이디 입력" required>
+        <input type="password" name="password" placeholder="비밀번호 입력" required>
+        <button type="submit" class="btn-login">로그인</button>
+    </form>
+</div>
+
+</body>
+</html>
