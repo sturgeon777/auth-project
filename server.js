@@ -128,6 +128,11 @@ const server = http.createServer((req, res) => {
             }
         });
     }
+    // 404 Not Found
+    else {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('페이지를 찾을 수 없습니다.');
+    }
 });
 
 server.listen(3000, '0.0.0.0', () => {
