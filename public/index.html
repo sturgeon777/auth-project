@@ -53,7 +53,7 @@
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSettingsModal()">SETTINGS</button>
     </div>
 
-    <p id="gameStatus" class="status-text">SELECT A GAME MODE TO START (CONTROLS: ARROWS / WASD)</p>
+    <p id="gameStatus" class="status-text"></p>
 
     <div class="layout-container">
       <canvas id="gameCanvas" width="800" height="800"></canvas>
@@ -131,6 +131,11 @@
       }
       localStorage.setItem('theme', mode);
       updateThemeButtons();
+      
+      // 설정 전환 시 게임 판 및 프레임 즉시 다시 그리기
+      if (typeof drawGame === 'function' && snake.length > 0) {
+        drawGame();
+      }
     }
 
     function updateThemeButtons() {
@@ -276,10 +281,13 @@
     }
 
     function renderSkinPreviews() {
+      const isLight = document.body.classList.contains('light-mode');
+
       ['neon', 'html', 'rainbow'].forEach(skin => {
         const cvs = document.getElementById(`prev-${skin}`);
         const pctx = cvs.getContext('2d');
-        pctx.fillStyle = '#000000';
+        
+        pctx.fillStyle = isLight ? '#ffffff' : '#000000';
         pctx.fillRect(0, 0, 100, 100);
 
         const dummySnake = [
@@ -291,14 +299,20 @@
         const size = 20;
 
         if (skin === 'html') {
-          // Pass 1: 배경
+          const bgBoxColor = isLight ? '#f0f0f0' : '#000000';
+          const textColor = isLight ? '#0451a5' : '#00ff00'; // VS Code Light 태그 파란색 vs Classic 그린
+
           dummySnake.forEach((part) => {
-            pctx.fillStyle = '#000000';
+            pctx.fillStyle = bgBoxColor;
             pctx.fillRect(part.x * size, part.y * size, size - 1, size - 1);
+            if (isLight) {
+              pctx.strokeStyle = '#d4d4d4';
+              pctx.strokeRect(part.x * size, part.y * size, size - 1, size - 1);
+            }
           });
-          // Pass 2: 초록색 텍스트 (11px)
+
           dummySnake.forEach((part, idx) => {
-            pctx.fillStyle = '#00ff00';
+            pctx.fillStyle = textColor;
             pctx.font = 'bold 11px monospace';
             pctx.textAlign = 'center';
             pctx.textBaseline = 'middle';
@@ -354,7 +368,7 @@
       dx = 1; dy = 0; score = 0;
       gameStartTime = Date.now();
       food = generateFood();
-      document.getElementById('gameStatus').innerText = "SINGLEPLAYER GAME IN PROGRESS...";
+      document.getElementById('gameStatus').innerText = "";
       gameInterval = setInterval(gameLoop, 90);
     }
 
@@ -390,25 +404,35 @@
     }
 
     function drawGame() {
-      ctx.fillStyle = '#000000';
+      const isLight = document.body.classList.contains('light-mode');
+
+      // 게임 판 배경색 전환 (라이트 모드: White, 다크 모드: Black)
+      ctx.fillStyle = isLight ? '#ffffff' : '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       rainbowHue = (rainbowHue + 4) % 360;
 
       if (currentSkin === 'html') {
-        // Pass 1: 모든 마디 배경 일괄 채우기 (검은색)
+        const bgBoxColor = isLight ? '#f0f0f0' : '#000000';
+        const textColor = isLight ? '#0451a5' : '#00ff00'; // VS Code Light 태그 파란색 vs 다크 모드 그린
+
+        // Pass 1: 마디 배경 채우기
         snake.forEach((part) => {
           const x = part.x * gridSize;
           const y = part.y * gridSize;
-          ctx.fillStyle = '#000000';
+          ctx.fillStyle = bgBoxColor;
           ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
+          if (isLight) {
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.strokeRect(x, y, gridSize - 1, gridSize - 1);
+          }
         });
 
-        // Pass 2: 모든 마디 텍스트 일괄 출력 (초록색, 11px 크기)
+        // Pass 2: 텍스트 출력
         snake.forEach((part, index) => {
           const x = part.x * gridSize;
           const y = part.y * gridSize;
-          ctx.fillStyle = '#00ff00';
+          ctx.fillStyle = textColor;
           ctx.font = 'bold 11px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -437,11 +461,14 @@
       const fy = food.y * gridSize;
 
       if (currentSkin === 'html') {
-        ctx.fillStyle = '#ff0055';
+        ctx.fillStyle = isLight ? '#fff1f0' : '#ff0055';
         ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
+        if (isLight) {
+          ctx.strokeStyle = '#ffa39e';
+          ctx.strokeRect(fx, fy, gridSize - 1, gridSize - 1);
+        }
 
-        ctx.fillStyle = '#ffffff';
-        /* <bug> 폰트 크기 기존 13px 유지 */
+        ctx.fillStyle = isLight ? '#cf1322' : '#ffffff'; // VS Code Light 에러/경고 빨간색
         ctx.font = '900 13px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

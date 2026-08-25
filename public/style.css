@@ -246,6 +246,12 @@ canvas#gameCanvas {
   image-rendering: crisp-edges;
 }
 
+body.light-mode canvas#gameCanvas {
+  background: #ffffff;
+  border-color: #cccccc;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.08);
+}
+
 .leaderboard-box {
   flex: 0 0 280px;
   background: var(--panel-light);
