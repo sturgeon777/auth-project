@@ -41,29 +41,34 @@
       margin-bottom: 30px;
     }
 
-    /* 인증 섹션 */
     .auth-container {
       display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
     }
 
     .form-box {
       background: var(--panel-bg);
       border: 1px solid var(--panel-border);
       border-left: 4px solid var(--accent-cyan);
-      padding: 25px;
-      width: 300px;
+      padding: 30px;
+      width: 340px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     }
 
     .form-box h3 {
-      font-size: 1.1rem;
-      margin-bottom: 15px;
+      font-size: 1.2rem;
+      margin-bottom: 8px;
       letter-spacing: 1px;
     }
 
-    input {
+    .form-box p.subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    input, select {
       width: 100%;
       padding: 12px;
       margin-bottom: 12px;
@@ -73,11 +78,10 @@
       outline: none;
     }
 
-    input:focus {
+    input:focus, select:focus {
       border-color: var(--accent-cyan);
     }
 
-    /* TETR.IO 스타일 버튼 */
     .btn-tetrio {
       width: 100%;
       padding: 12px;
@@ -115,7 +119,6 @@
       box-shadow: 0 0 15px rgba(255, 0, 85, 0.6);
     }
 
-    /* 게임 섹션 */
     #gameSection {
       width: 100%;
       max-width: 850px;
@@ -136,10 +139,26 @@
       color: var(--accent-cyan);
     }
 
-    .mode-buttons {
+    .controls-panel {
       display: flex;
       gap: 15px;
+      align-items: center;
       margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .skin-select-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--panel-bg);
+      padding: 5px 15px;
+      border: 1px solid var(--panel-border);
+    }
+
+    .skin-select-box select {
+      margin-bottom: 0;
+      width: auto;
     }
 
     .status-text {
@@ -197,20 +216,14 @@
 <body>
   <h2 class="main-title">SNAKE.IO</h2>
 
-  <!-- 1. 인증 영역 -->
+  <!-- 1. 단일 통합 인증 영역 -->
   <div id="authSection" class="auth-container">
     <div class="form-box">
-      <h3>1. 회원가입</h3>
-      <input type="text" id="regUser" placeholder="아이디 입력" required>
-      <input type="password" id="regPass" placeholder="비밀번호 입력" required>
-      <button type="button" class="btn-tetrio" onclick="signup()"><span>회원가입</span></button>
-    </div>
-
-    <div class="form-box">
-      <h3>2. 로그인</h3>
-      <input type="text" id="loginUser" placeholder="아이디 입력" required>
-      <input type="password" id="loginPass" placeholder="비밀번호 입력" required>
-      <button type="button" class="btn-tetrio secondary" onclick="login()"><span>로그인</span></button>
+      <h3>JOIN / LOGIN</h3>
+      <p class="subtitle">계정이 없으면 자동 생성되며, 기존 계정은 로그인됩니다.</p>
+      <input type="text" id="authUser" placeholder="아이디 입력" required>
+      <input type="password" id="authPass" placeholder="비밀번호 입력" required>
+      <button type="button" class="btn-tetrio" onclick="handleAuth()"><span>접속하기</span></button>
     </div>
   </div>
 
@@ -223,12 +236,21 @@
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 6px 15px;" onclick="logout()"><span>로그아웃</span></button>
     </div>
 
-    <div class="mode-buttons">
-      <button type="button" class="btn-tetrio" onclick="startSingleGame()"><span>싱글 플레이</span></button>
-      <button type="button" class="btn-tetrio secondary" onclick="joinMatchmaking()"><span>1대1 매치메이킹</span></button>
+    <div class="controls-panel">
+      <button type="button" class="btn-tetrio" style="width: auto;" onclick="startSingleGame()"><span>싱글 플레이</span></button>
+      <button type="button" class="btn-tetrio secondary" style="width: auto;" onclick="joinMatchmaking()"><span>1대1 매치메이킹</span></button>
+      
+      <div class="skin-select-box">
+        <label for="skinSelect" style="font-size: 0.9rem; color: var(--text-muted);">스킨:</label>
+        <select id="skinSelect">
+          <option value="neon">기본 네온</option>
+          <option value="html">HTML 태그 (&lt;head&gt;, &lt;body&gt;, &lt;/body&gt;)</option>
+          <option value="rainbow">무지개 (Rainbow)</option>
+        </select>
+      </div>
     </div>
 
-    <p id="gameStatus" class="status-text">게임 모드를 선택해주세요.</p>
+    <p id="gameStatus" class="status-text">게임 모드를 선택해주세요. (조작: 방향키 또는 W/A/S/D)</p>
 
     <div class="layout-container">
       <canvas id="gameCanvas" width="400" height="400"></canvas>
@@ -245,28 +267,33 @@
     let currentUser = localStorage.getItem('username');
     let socket = null;
     let gameInterval = null;
+    let rainbowHue = 0;
 
     if (token) showGameView();
 
-    async function signup() {
-      const username = document.getElementById('regUser').value;
-      const password = document.getElementById('regPass').value;
+    // 통합 인증 처리 (회원가입/로그인 단일창)
+    async function handleAuth() {
+      const username = document.getElementById('authUser').value.trim();
+      const password = document.getElementById('authPass').value.trim();
       if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
 
-      const res = await fetch('/api/signup', {
+      // 1. 회원가입 시도
+      const regRes = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const data = await res.json();
-      alert(data.message || data.error);
+
+      if (regRes.ok) {
+        alert('새 계정이 생성되었습니다!');
+        await performLogin(username, password);
+      } else {
+        // 이미 존재하는 계정이면 로그인 시도
+        await performLogin(username, password);
+      }
     }
 
-    async function login() {
-      const username = document.getElementById('loginUser').value;
-      const password = document.getElementById('loginPass').value;
-      if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
-
+    async function performLogin(username, password) {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -280,7 +307,7 @@
         localStorage.setItem('username', currentUser);
         showGameView(data.highScore);
       } else {
-        alert(data.error);
+        alert('비밀번호가 틀렸습니다.');
       }
     }
 
@@ -317,7 +344,7 @@
 
     function startSingleGame() {
       if (gameInterval) clearInterval(gameInterval);
-      snake = [{x: 10, y: 10}];
+      snake = [{x: 10, y: 10}, {x: 9, y: 10}, {x: 8, y: 10}];
       dx = 1; dy = 0; score = 0;
       document.getElementById('gameStatus').innerText = "싱글 플레이 진행 중...";
       gameInterval = setInterval(gameLoop, 100);
@@ -348,11 +375,40 @@
       ctx.fillStyle = '#050608';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 네온 스타일 스네이크
-      ctx.fillStyle = '#00f0ff';
-      snake.forEach(part => ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2));
+      const skin = document.getElementById('skinSelect').value;
+      rainbowHue = (rainbowHue + 4) % 360;
 
-      // 네온 스타일 먹이
+      // 스네이크 그리기
+      snake.forEach((part, index) => {
+        const x = part.x * gridSize;
+        const y = part.y * gridSize;
+
+        if (skin === 'rainbow') {
+          const hue = (rainbowHue + index * 12) % 360;
+          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
+        } else if (skin === 'html') {
+          ctx.fillStyle = index === 0 ? '#00f0ff' : '#1e293b';
+          ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
+
+          ctx.fillStyle = index === 0 ? '#000000' : '#00f0ff';
+          ctx.font = 'bold 8px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          let tag = '<body>';
+          if (index === 0) tag = '<head>';
+          else if (index === snake.length - 1) tag = '</body>';
+
+          ctx.fillText(tag, x + gridSize / 2, y + gridSize / 2);
+        } else {
+          // 기본 네온
+          ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
+          ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+        }
+      });
+
+      // 먹이 그리기
       ctx.fillStyle = '#ff0055';
       ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
     }
@@ -370,7 +426,6 @@
         body: JSON.stringify({ score })
       });
 
-      // 실시간 최고 점수 DOM 갱신
       const currentHigh = parseInt(document.getElementById('highScoreDisplay').innerText) || 0;
       if (score > currentHigh) {
         document.getElementById('highScoreDisplay').innerText = score;
@@ -379,11 +434,13 @@
       loadLeaderboard();
     }
 
+    // 키보드 조작 (방향키 + WASD 지원)
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowUp' && dy !== 1) { dx = 0; dy = -1; }
-      if (e.key === 'ArrowDown' && dy !== -1) { dx = 0; dy = 1; }
-      if (e.key === 'ArrowLeft' && dx !== 1) { dx = -1; dy = 0; }
-      if (e.key === 'ArrowRight' && dx !== -1) { dx = 1; dy = 0; }
+      const key = e.key.toLowerCase();
+      if ((e.key === 'ArrowUp' || key === 'w') && dy !== 1) { dx = 0; dy = -1; }
+      if ((e.key === 'ArrowDown' || key === 's') && dy !== -1) { dx = 0; dy = 1; }
+      if ((e.key === 'ArrowLeft' || key === 'a') && dx !== 1) { dx = -1; dy = 0; }
+      if ((e.key === 'ArrowRight' || key === 'd') && dx !== -1) { dx = 1; dy = 0; }
     });
 
     // --- Socket.io 통신 ---
