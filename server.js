@@ -33,11 +33,11 @@ function saveData(data) {
 // REST API
 app.get('/api/stats', (req, res) => {
   const db = loadData();
-  const totalPlayers = Object.keys(db.users).length;
-  const gamesPlayed = db.stats.totalGames || 0;
-  const hoursPlayed = ((db.stats.totalPlaySeconds || 0) / 3600).toFixed(1);
-
-  res.json({ totalPlayers, gamesPlayed, hoursPlayed });
+  res.json({
+    totalPlayers: Object.keys(db.users).length,
+    gamesPlayed: db.stats.totalGames || 0,
+    hoursPlayed: ((db.stats.totalPlaySeconds || 0) / 3600).toFixed(1)
+  });
 });
 
 app.get('/api/leaderboard', (req, res) => {
@@ -52,10 +52,7 @@ app.get('/api/leaderboard', (req, res) => {
 app.post('/api/signup', (req, res) => {
   const { username, password } = req.body;
   const db = loadData();
-
-  if (db.users[username]) {
-    return res.status(400).json({ message: 'User already exists' });
-  }
+  if (db.users[username]) return res.status(400).json({ message: 'User already exists' });
 
   db.users[username] = { username, password, highScore: 0 };
   saveData(db);
@@ -66,10 +63,7 @@ app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   const db = loadData();
   const user = db.users[username];
-
-  if (!user || user.password !== password) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
+  if (!user || user.password !== password) return res.status(401).json({ message: 'Invalid credentials' });
 
   res.json({ token: username, username, highScore: user.highScore });
 });
@@ -80,20 +74,19 @@ app.post('/api/score', (req, res) => {
   const db = loadData();
 
   if (token && db.users[token]) {
-    if (score > db.users[token].highScore) {
-      db.users[token].highScore = score;
-    }
+    if (score > db.users[token].highScore) db.users[token].highScore = score;
   }
-
   db.stats.totalGames = (db.stats.totalGames || 0) + 1;
   db.stats.totalPlaySeconds = (db.stats.totalPlaySeconds || 0) + (playSeconds || 10);
   saveData(db);
-
   res.json({ message: 'Score updated' });
 });
 
-// 1대1 매칭 및 Socket.io 실시간 게임 로직
-const matchmakingQueue = [];
+// 대기열 (모드별 분리: 'shared' | 'individual')
+const queues = {
+  shared: [],
+  individual: []
+};
 const activeMatches = {};
 
 function generateFood(tileCount = 40) {
@@ -105,73 +98,47 @@ function generateFood(tileCount = 40) {
 
 io.on('connection', (socket) => {
   socket.on('joinQueue', (data) => {
-    // 중복 등록 방지
-    const existingIndex = matchmakingQueue.findIndex(item => item.socket.id === socket.id);
-    if (existingIndex !== -1) return;
+    const mode = data.mode === 'individual' ? 'individual' : 'shared';
+    
+    // 기존 중복 참가 제거
+    removeFromQueues(socket.id);
 
-    matchmakingQueue.push({
+    queues[mode].push({
       socket,
       username: data.username || 'Player',
-      skin: data.skin || 'neon'
+      mode
     });
 
-    socket.emit('waiting', { message: '상대를 찾는 중입니다...' });
+    socket.emit('waiting', { message: '상대를 찾는 중입니다...', mode });
 
-    // 2명이 대기열에 모이면 매칭 실행
-    if (matchmakingQueue.length >= 2) {
-      const player1 = matchmakingQueue.shift();
-      const player2 = matchmakingQueue.shift();
-      const roomId = `room_${player1.socket.id}_${player2.socket.id}`;
+    // 2명 매칭 조건
+    if (queues[mode].length >= 2) {
+      const p1 = queues[mode].shift();
+      const p2 = queues[mode].shift();
+      const roomId = `room_${p1.socket.id}_${p2.socket.id}`;
 
-      player1.socket.join(roomId);
-      player2.socket.join(roomId);
+      p1.socket.join(roomId);
+      p2.socket.join(roomId);
 
-      const gameState = {
-        roomId,
-        tileCount: 40,
-        food: generateFood(40),
-        players: [
-          {
-            id: player1.socket.id,
-            username: player1.username,
-            snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
-            dir: {dx: 1, dy: 0},
-            nextDir: {dx: 1, dy: 0},
-            score: 0
-          },
-          {
-            id: player2.socket.id,
-            username: player2.username,
-            snake: [{x: 30, y: 20}, {x: 31, y: 20}, {x: 32, y: 20}],
-            dir: {dx: -1, dy: 0},
-            nextDir: {dx: -1, dy: 0},
-            score: 0
-          }
-        ]
-      };
+      const gameState = createInitialGameState(roomId, mode, p1, p2);
 
-      player1.socket.emit('matchFound', { opponent: player2.username });
-      player2.socket.emit('matchFound', { opponent: player1.username });
-
-      // 매칭 게임 루프 생성 (90ms 프레임)
-      const interval = setInterval(() => {
-        updateMatchState(roomId);
-      }, 90);
+      p1.socket.emit('matchFound', { opponent: p2.username, mode });
+      p2.socket.emit('matchFound', { opponent: p1.username, mode });
 
       activeMatches[roomId] = {
         gameState,
-        interval,
-        p1Socket: player1.socket,
-        p2Socket: player2.socket
+        mode,
+        interval: null,
+        countdownInterval: null
       };
+
+      // 3-2-1 카운트다운 시작
+      startCountdown(roomId);
     }
   });
 
   socket.on('cancelQueue', () => {
-    const index = matchmakingQueue.findIndex(item => item.socket.id === socket.id);
-    if (index !== -1) {
-      matchmakingQueue.splice(index, 1);
-    }
+    removeFromQueues(socket.id);
   });
 
   socket.on('playerInput', (dir) => {
@@ -188,8 +155,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    const qIndex = matchmakingQueue.findIndex(item => item.socket.id === socket.id);
-    if (qIndex !== -1) matchmakingQueue.splice(qIndex, 1);
+    removeFromQueues(socket.id);
 
     for (const roomId in activeMatches) {
       const match = activeMatches[roomId];
@@ -197,40 +163,133 @@ io.on('connection', (socket) => {
       if (playerIndex !== -1) {
         const winner = match.gameState.players[1 - playerIndex];
         const winnerName = winner ? winner.username : 'Unknown';
-        
-        io.to(roomId).emit('matchOver', { winner: winnerName });
-        clearInterval(match.interval);
-        
-        // 통계 업데이트
-        recordMatchStats(winnerName);
-        delete activeMatches[roomId];
+
+        io.to(roomId).emit('matchOver', { winner: winnerName, reason: 'opponent_disconnected' });
+        cleanUpMatch(roomId);
+        recordStats(winnerName);
         break;
       }
     }
   });
 });
 
+function removeFromQueues(socketId) {
+  ['shared', 'individual'].forEach(m => {
+    const idx = queues[m].findIndex(item => item.socket.id === socketId);
+    if (idx !== -1) queues[m].splice(idx, 1);
+  });
+}
+
+function createInitialGameState(roomId, mode, p1, p2) {
+  const tileCount = 40;
+  if (mode === 'shared') {
+    return {
+      roomId,
+      mode,
+      tileCount,
+      food: generateFood(tileCount),
+      players: [
+        {
+          id: p1.socket.id,
+          username: p1.username,
+          snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
+          dir: {dx: 1, dy: 0},
+          nextDir: {dx: 1, dy: 0},
+          score: 0,
+          isDead: false
+        },
+        {
+          id: p2.socket.id,
+          username: p2.username,
+          snake: [{x: 30, y: 20}, {x: 31, y: 20}, {x: 32, y: 20}],
+          dir: {dx: -1, dy: 0},
+          nextDir: {dx: -1, dy: 0},
+          score: 0,
+          isDead: false
+        }
+      ]
+    };
+  } else {
+    return {
+      roomId,
+      mode,
+      tileCount,
+      players: [
+        {
+          id: p1.socket.id,
+          username: p1.username,
+          snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
+          dir: {dx: 1, dy: 0},
+          nextDir: {dx: 1, dy: 0},
+          food: generateFood(tileCount),
+          score: 0,
+          isDead: false
+        },
+        {
+          id: p2.socket.id,
+          username: p2.username,
+          snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
+          dir: {dx: 1, dy: 0},
+          nextDir: {dx: 1, dy: 0},
+          food: generateFood(tileCount),
+          score: 0,
+          isDead: false
+        }
+      ]
+    };
+  }
+}
+
+function startCountdown(roomId) {
+  const match = activeMatches[roomId];
+  let count = 3;
+
+  io.to(roomId).emit('countdownTick', { count });
+
+  match.countdownInterval = setInterval(() => {
+    count -= 1;
+    if (count > 0) {
+      io.to(roomId).emit('countdownTick', { count });
+    } else {
+      clearInterval(match.countdownInterval);
+      io.to(roomId).emit('countdownTick', { count: 'START' });
+      
+      match.interval = setInterval(() => {
+        updateMatchState(roomId);
+      }, 90);
+    }
+  }, 1000);
+}
+
 function updateMatchState(roomId) {
   const match = activeMatches[roomId];
   if (!match) return;
 
   const state = match.gameState;
+  if (state.mode === 'shared') {
+    updateSharedMatch(roomId, match);
+  } else {
+    updateIndividualMatch(roomId, match);
+  }
+}
+
+// 1. 공용 맵 모드 (먼저 죽는 사람이 패배)
+function updateSharedMatch(roomId, match) {
+  const state = match.gameState;
   let gameOver = false;
   let winner = null;
 
-  // 플레이어 이동 처리
   state.players.forEach(p => {
+    if (p.isDead) return;
     p.dir = p.nextDir;
     const head = { x: p.snake[0].x + p.dir.dx, y: p.snake[0].y + p.dir.dy };
 
-    // 벽 충돌 체크
     if (head.x < 0 || head.x >= state.tileCount || head.y < 0 || head.y >= state.tileCount) {
-      gameOver = true;
+      p.isDead = true;
     }
 
     p.snake.unshift(head);
 
-    // 먹이 충돌 체크
     if (head.x === state.food.x && head.y === state.food.y) {
       p.score += 10;
       state.food = generateFood(state.tileCount);
@@ -239,61 +298,121 @@ function updateMatchState(roomId) {
     }
   });
 
-  // 몸통 충돌 및 상호 충돌 체크
   const [p1, p2] = state.players;
-  if (!gameOver) {
-    const p1Head = p1.snake[0];
-    const p2Head = p2.snake[0];
+  const checkCollision = (head, snake, isSelf) => {
+    const body = isSelf ? snake.slice(1) : snake;
+    return body.some(part => part.x === head.x && part.y === head.y);
+  };
 
-    const checkCollision = (head, snake, isSelf) => {
-      const body = isSelf ? snake.slice(1) : snake;
-      return body.some(part => part.x === head.x && part.y === head.y);
-    };
-
-    const p1Dead = checkCollision(p1Head, p1.snake, true) || checkCollision(p1Head, p2.snake, false);
-    const p2Dead = checkCollision(p2Head, p2.snake, true) || checkCollision(p2Head, p1.snake, false);
-
-    if (p1Dead && p2Dead) {
-      gameOver = true;
-      winner = 'DRAW';
-    } else if (p1Dead) {
-      gameOver = true;
-      winner = p2.username;
-    } else if (p2Dead) {
-      gameOver = true;
-      winner = p1.username;
+  if (!p1.isDead) {
+    if (checkCollision(p1.snake[0], p1.snake, true) || checkCollision(p1.snake[0], p2.snake, false)) {
+      p1.isDead = true;
+    }
+  }
+  if (!p2.isDead) {
+    if (checkCollision(p2.snake[0], p2.snake, true) || checkCollision(p2.snake[0], p1.snake, false)) {
+      p2.isDead = true;
     }
   }
 
+  if (p1.isDead || p2.isDead) {
+    gameOver = true;
+    if (p1.isDead && p2.isDead) winner = 'DRAW';
+    else if (p1.isDead) winner = p2.username;
+    else winner = p1.username;
+  }
+
   if (gameOver) {
-    if (!winner) {
-      if (p1.score > p2.score) winner = p1.username;
-      else if (p2.score > p1.score) winner = p2.username;
-      else winner = 'DRAW';
-    }
-
-    // 파일 DB 통계 업데이트 및 저장
-    recordMatchStats(winner, p1, p2);
-
-    io.to(roomId).emit('matchOver', { winner });
-    clearInterval(match.interval);
-    delete activeMatches[roomId];
+    endMatch(roomId, winner);
   } else {
     io.to(roomId).emit('gameState', state);
   }
 }
 
-function recordMatchStats(winner, p1, p2) {
+// 2. 독립 맵 모드 (점수 무관, 먼저 죽는 사람이 패배)
+function updateIndividualMatch(roomId, match) {
+  const state = match.gameState;
+  let gameOver = false;
+  let winner = null;
+
+  state.players.forEach(p => {
+    if (p.isDead) return;
+    p.dir = p.nextDir;
+    const head = { x: p.snake[0].x + p.dir.dx, y: p.snake[0].y + p.dir.dy };
+
+    // 벽 충돌
+    if (head.x < 0 || head.x >= state.tileCount || head.y < 0 || head.y >= state.tileCount) {
+      p.isDead = true;
+    }
+
+    // 자기 자신 몸통 충돌
+    if (p.snake.slice(1).some(part => part.x === head.x && part.y === head.y)) {
+      p.isDead = true;
+    }
+
+    p.snake.unshift(head);
+
+    // 각자 개별 먹이 처리
+    if (head.x === p.food.x && head.y === p.food.y) {
+      p.score += 10;
+      p.food = generateFood(state.tileCount);
+    } else {
+      p.snake.pop();
+    }
+  });
+
+  const [p1, p2] = state.players;
+
+  // 한 명이라도 탈락 시 먼저 죽은 사람 패배 (점수 상관 없음)
+  if (p1.isDead || p2.isDead) {
+    gameOver = true;
+    if (p1.isDead && p2.isDead) {
+      winner = 'DRAW';
+    } else if (p1.isDead) {
+      winner = p2.username;
+    } else {
+      winner = p1.username;
+    }
+  }
+
+  if (gameOver) {
+    endMatch(roomId, winner);
+  } else {
+    io.to(roomId).emit('gameState', state);
+  }
+}
+
+function endMatch(roomId, winner) {
+  const match = activeMatches[roomId];
+  if (!match) return;
+
+  const [p1, p2] = match.gameState.players;
+  recordStats(winner, p1, p2);
+
+  io.to(roomId).emit('matchOver', { winner });
+  cleanUpMatch(roomId);
+}
+
+function cleanUpMatch(roomId) {
+  const match = activeMatches[roomId];
+  if (match) {
+    if (match.interval) clearInterval(match.interval);
+    if (match.countdownInterval) clearInterval(match.countdownInterval);
+    delete activeMatches[roomId];
+  }
+}
+
+function recordStats(winner, p1, p2) {
   const db = loadData();
   db.stats.totalGames = (db.stats.totalGames || 0) + 1;
-  
+
   if (p1 && db.users[p1.username] && p1.score > db.users[p1.username].highScore) {
     db.users[p1.username].highScore = p1.score;
   }
   if (p2 && db.users[p2.username] && p2.score > db.users[p2.username].highScore) {
     db.users[p2.username].highScore = p2.score;
   }
-  
+
   saveData(db);
 }
 
