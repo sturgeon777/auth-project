@@ -1,33 +1,202 @@
 <!DOCTYPE html>
-
-<html>
+<html lang="ko">
 <head>
-<meta charset="utf-8">
-<title></title>
-<link rel="stylesheet" href="/style.css">
+  <meta charset="utf-8">
+  <title>TETR.IO Style Snake Game</title>
+  <link rel="stylesheet" href="/style.css">
+  <!-- Socket.io 클라이언트 라이브러리 자동 로드 -->
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-<h2>(가입/로그인)</h2>
+  <h2>스네이크 대전 게임</h2>
 
-<!-- 회원가입 -->
-<div class="form-box">
-    <h3>1. 회원가입 </h3>
-    <form action="/register" method="POST">
-        <input type="text" name="username" placeholder="아이디 입력" required>
-        <input type="password" name="password" placeholder="비밀번호 입력" required>
-        <button type="submit" class="btn-reg">회원가입</button>
-    </form>
-</div>
+  <!-- 1. 로그인/회원가입 섹션 -->
+  <div id="authSection">
+    <div class="form-box">
+      <h3>1. 회원가입</h3>
+      <input type="text" id="regUser" placeholder="아이디 입력" required>
+      <input type="password" id="regPass" placeholder="비밀번호 입력" required>
+      <button type="button" class="btn-reg" onclick="signup()">회원가입</button>
+    </div>
 
-<!-- 로그인 -->
-<div class="form-box">
-    <h3>2. 로그인 </h3>
-    <form action="/login" method="POST">
-        <input type="text" name="username" placeholder="아이디 입력" required>
-        <input type="password" name="password" placeholder="비밀번호 입력" required>
-        <button type="submit" class="btn-login">로그인</button>
-    </form>
-</div>
+    <div class="form-box">
+      <h3>2. 로그인</h3>
+      <input type="text" id="loginUser" placeholder="아이디 입력" required>
+      <input type="password" id="loginPass" placeholder="비밀번호 입력" required>
+      <button type="button" class="btn-login" onclick="login()">로그인</button>
+    </div>
+  </div>
 
+  <!-- 2. 게임 영역 (로그인 후 노출) -->
+  <div id="gameSection" style="display: none;">
+    <div class="user-bar">
+      <span>접속자: <strong id="usernameDisplay"></strong>님 (최고점수: <strong id="highScoreDisplay">0</strong>점)</span>
+      <button type="button" class="btn-logout" onclick="logout()">로그아웃</button>
+    </div>
+
+    <div class="mode-buttons">
+      <button type="button" class="btn-reg" onclick="startSingleGame()">싱글 플레이 시작</button>
+      <button type="button" class="btn-login" onclick="joinMatchmaking()">1대1 매치메이킹</button>
+    </div>
+
+    <p id="gameStatus" class="status-text">게임 모드를 선택해주세요.</p>
+
+    <div class="layout-container">
+      <canvas id="gameCanvas" width="400" height="400"></canvas>
+      
+      <div class="leaderboard-box">
+        <h3>🏆 전역 리더보드 TOP 10</h3>
+        <ol id="leaderboardList"></ol>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let token = localStorage.getItem('jwtToken');
+    let currentUser = localStorage.getItem('username');
+    let socket = null;
+    let gameInterval = null;
+
+    // 초기 상태 체크
+    if (token) showGameView();
+
+    async function signup() {
+      const username = document.getElementById('regUser').value;
+      const password = document.getElementById('regPass').value;
+      const res = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+    }
+
+    async function login() {
+      const username = document.getElementById('loginUser').value;
+      const password = document.getElementById('loginPass').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        token = data.token;
+        currentUser = data.username;
+        localStorage.setItem('jwtToken', token);
+        localStorage.setItem('username', currentUser);
+        showGameView(data.highScore);
+      } else {
+        alert(data.error);
+      }
+    }
+
+    function logout() {
+      localStorage.clear();
+      location.reload();
+    }
+
+    function showGameView(highScore = 0) {
+      document.getElementById('authSection').style.display = 'none';
+      document.getElementById('gameSection').style.display = 'block';
+      document.getElementById('usernameDisplay').innerText = currentUser;
+      document.getElementById('highScoreDisplay').innerText = highScore;
+      loadLeaderboard();
+      initSocket();
+    }
+
+    async function loadLeaderboard() {
+      const res = await fetch('/api/leaderboard');
+      const list = await res.json();
+      const listEl = document.getElementById('leaderboardList');
+      listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore}점</li>`).join('');
+    }
+
+    // --- 싱글 플레이 스네이크 게임 로직 ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gridSize = 20;
+    const tileCount = 20;
+    let snake = [{x: 10, y: 10}];
+    let food = {x: 15, y: 15};
+    let dx = 1, dy = 0;
+    let score = 0;
+
+    function startSingleGame() {
+      if (gameInterval) clearInterval(gameInterval);
+      snake = [{x: 10, y: 10}];
+      dx = 1; dy = 0; score = 0;
+      document.getElementById('gameStatus').innerText = "싱글 플레이 진행 중...";
+      gameInterval = setInterval(gameLoop, 100);
+    }
+
+    function gameLoop() {
+      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+      // 벽 충돌 감지
+      if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+        return gameOver();
+      }
+
+      snake.unshift(head);
+      if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        food = { Math.floor(Math.random() * tileCount), Math.floor(Math.random() * tileCount) };
+      } else {
+        snake.pop();
+      }
+
+      drawGame();
+    }
+
+    function drawGame() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#27ae60';
+      snake.forEach(part => ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2));
+
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+    }
+
+    async function gameOver() {
+      clearInterval(gameInterval);
+      document.getElementById('gameStatus').innerText = `게임 오버! 최종 점수: ${score}점`;
+      
+      // 서버에 점수 전송
+      await fetch('/api/score', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ score })
+      });
+      loadLeaderboard();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' && dy !== 1) { dx = 0; dy = -1; }
+      if (e.key === 'ArrowDown' && dy !== -1) { dx = 0; dy = 1; }
+      if (e.key === 'ArrowLeft' && dx !== 1) { dx = -1; dy = 0; }
+      if (e.key === 'ArrowRight' && dx !== -1) { dx = 1; dy = 0; }
+    });
+
+    // --- Socket.io 실시간 1대1 대전 ---
+    function initSocket() {
+      socket = io();
+      socket.on('match_found', (data) => {
+        document.getElementById('gameStatus').innerText = `매칭 성공! 상대: ${data.players.find(p => p !== currentUser)}`;
+      });
+    }
+
+    function joinMatchmaking() {
+      if (!socket) return;
+      document.getElementById('gameStatus').innerText = "상대 플레이어를 찾는 중...";
+      socket.emit('join_queue', token);
+    }
+  </script>
 </body>
 </html>
