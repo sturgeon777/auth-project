@@ -122,8 +122,9 @@ io.on('connection', (socket) => {
 
       const gameState = createInitialGameState(roomId, mode, p1, p2);
 
-      p1.socket.emit('matchFound', { opponent: p2.username, mode });
-      p2.socket.emit('matchFound', { opponent: p1.username, mode });
+      // 각 소켓에 playerIndex(0, 1) 포함하여 이벤트 전송
+      p1.socket.emit('matchFound', { opponent: p2.username, mode, playerIndex: 0 });
+      p2.socket.emit('matchFound', { opponent: p1.username, mode, playerIndex: 1 });
 
       activeMatches[roomId] = {
         gameState,
@@ -182,60 +183,52 @@ function removeFromQueues(socketId) {
 
 function createInitialGameState(roomId, mode, p1, p2) {
   const tileCount = 40;
+
+  const player1Obj = {
+    id: p1.socket.id,
+    username: p1.username,
+    playerIndex: 0,
+    color: '#3b82f6', // Player 1 고정 색상: 파란색
+    snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
+    dir: {dx: 1, dy: 0},
+    nextDir: {dx: 1, dy: 0},
+    score: 0,
+    isDead: false
+  };
+
+  const player2Obj = {
+    id: p2.socket.id,
+    username: p2.username,
+    playerIndex: 1,
+    color: '#ef4444', // Player 2 고정 색상: 빨간색
+    snake: [{x: 30, y: 20}, {x: 31, y: 20}, {x: 32, y: 20}],
+    dir: {dx: -1, dy: 0},
+    nextDir: {dx: -1, dy: 0},
+    score: 0,
+    isDead: false
+  };
+
   if (mode === 'shared') {
     return {
       roomId,
       mode,
       tileCount,
       food: generateFood(tileCount),
-      players: [
-        {
-          id: p1.socket.id, // 소켓 ID 명시
-          username: p1.username,
-          snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
-          dir: {dx: 1, dy: 0},
-          nextDir: {dx: 1, dy: 0},
-          score: 0,
-          isDead: false
-        },
-        {
-          id: p2.socket.id, // 소켓 ID 명시
-          username: p2.username,
-          snake: [{x: 30, y: 20}, {x: 31, y: 20}, {x: 32, y: 20}],
-          dir: {dx: -1, dy: 0},
-          nextDir: {dx: -1, dy: 0},
-          score: 0,
-          isDead: false
-        }
-      ]
+      players: [player1Obj, player2Obj]
     };
   } else {
+    player1Obj.food = generateFood(tileCount);
+    player2Obj.food = generateFood(tileCount);
+
+    player2Obj.snake = [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}];
+    player2Obj.dir = {dx: 1, dy: 0};
+    player2Obj.nextDir = {dx: 1, dy: 0};
+
     return {
       roomId,
       mode,
       tileCount,
-      players: [
-        {
-          id: p1.socket.id, // 소켓 ID 명시
-          username: p1.username,
-          snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
-          dir: {dx: 1, dy: 0},
-          nextDir: {dx: 1, dy: 0},
-          food: generateFood(tileCount),
-          score: 0,
-          isDead: false
-        },
-        {
-          id: p2.socket.id, // 소켓 ID 명시
-          username: p2.username,
-          snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
-          dir: {dx: 1, dy: 0},
-          nextDir: {dx: 1, dy: 0},
-          food: generateFood(tileCount),
-          score: 0,
-          isDead: false
-        }
-      ]
+      players: [player1Obj, player2Obj]
     };
   }
 }
