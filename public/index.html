@@ -48,7 +48,7 @@
 
     <div class="controls-panel">
       <button type="button" class="btn-tetrio" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="startSingleGame()">SINGLEPLAYER</button>
-      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking()">1VS1 MATCH</button>
+      <button type="button" class="btn-tetrio secondary" id="btnMatchmaking" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking()">1VS1 MATCH</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSkinModal()">SKINS</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSettingsModal()">SETTINGS</button>
     </div>
@@ -112,6 +112,9 @@
     let gameStartTime = 0;
     let inputQueue = [];
 
+    let isMultiplayer = false;
+    let isMatchmaking = false;
+
     window.onload = async () => {
       initTheme();
       await fetchGlobalStats();
@@ -140,7 +143,7 @@
       localStorage.setItem('theme', mode);
       updateThemeButtons();
       
-      if (typeof drawGame === 'function' && snake.length > 0) {
+      if (typeof drawGame === 'function' && snake.length > 0 && !isMultiplayer) {
         drawGame();
       }
     }
@@ -287,6 +290,54 @@
       }
     }
 
+    function initSocket() {
+      if (socket) return;
+      socket = io();
+
+      socket.on('waiting', (data) => {
+        document.getElementById('gameStatus').innerText = data?.message || '상대를 찾는 중입니다...';
+      });
+
+      socket.on('matchFound', (data) => {
+        isMatchmaking = false;
+        isMultiplayer = true;
+        document.getElementById('btnMatchmaking').innerText = '1VS1 MATCH';
+        document.getElementById('gameStatus').innerText = `매칭 완료! 상대: ${data.opponent}`;
+        if (gameInterval) clearInterval(gameInterval);
+      });
+
+      socket.on('gameState', (state) => {
+        drawMultiplayerGame(state);
+      });
+
+      socket.on('matchOver', (data) => {
+        isMultiplayer = false;
+        document.getElementById('gameStatus').innerText = `게임 종료! 승자: ${data.winner}`;
+        fetchGlobalStats();
+        loadLeaderboard();
+      });
+    }
+
+    function joinMatchmaking() {
+      if (!token || !currentUser) return alert('로그인이 필요합니다.');
+
+      initSocket();
+
+      if (isMatchmaking) {
+        socket.emit('cancelQueue');
+        isMatchmaking = false;
+        document.getElementById('btnMatchmaking').innerText = '1VS1 MATCH';
+        document.getElementById('gameStatus').innerText = '매칭이 취소되었습니다.';
+      } else {
+        if (gameInterval) clearInterval(gameInterval);
+        isMultiplayer = false;
+        isMatchmaking = true;
+        document.getElementById('btnMatchmaking').innerText = 'CANCEL MATCH';
+        document.getElementById('gameStatus').innerText = '상대를 찾는 중...';
+        socket.emit('joinQueue', { username: currentUser, skin: currentSkin, token });
+      }
+    }
+
     function getHtmlTagForIndex(index, length) {
       if (index === 0) return '<head>';
       if (index === 1) return '</head>';
@@ -395,6 +446,12 @@
 
     function startSingleGame() {
       if (gameInterval) clearInterval(gameInterval);
+      if (isMatchmaking && socket) {
+        socket.emit('cancelQueue');
+        isMatchmaking = false;
+        document.getElementById('btnMatchmaking').innerText = '1VS1 MATCH';
+      }
+      isMultiplayer = false;
       
       inputQueue = [];
       snake = [
@@ -494,7 +551,6 @@
         });
       }
 
-      // 먹이 렌더링
       const fx = food.x * gridSize;
       const fy = food.y * gridSize;
 
@@ -511,7 +567,6 @@
           ctx.textBaseline = 'middle';
           ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
         } else {
-          // 다크 모드 예전 버전 사과 (솔리드 네온 핑크 배경 + 흰색 글씨)
           ctx.fillStyle = '#ff0055';
           ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
 
@@ -524,6 +579,33 @@
       } else {
         ctx.fillStyle = '#ff0055';
         ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
+      }
+    }
+
+    function drawMultiplayerGame(state) {
+      if (!state) return;
+      const isLight = document.body.classList.contains('light-mode');
+
+      ctx.fillStyle = isLight ? '#ffffff' : '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (state.food) {
+        const fx = state.food.x * gridSize;
+        const fy = state.food.y * gridSize;
+        ctx.fillStyle = '#ff0055';
+        ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
+      }
+
+      if (state.players && Array.isArray(state.players)) {
+        state.players.forEach((player) => {
+          const isMe = (player.username === currentUser);
+          player.snake.forEach((part, index) => {
+            const x = part.x * gridSize;
+            const y = part.y * gridSize;
+            ctx.fillStyle = isMe ? (index === 0 ? '#00f0ff' : '#00a3cc') : (index === 0 ? '#ffaa00' : '#cc8800');
+            ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+          });
+        });
       }
     }
 
@@ -565,10 +647,14 @@
       if (e.key === 'ArrowRight' || key === 'd') newDir = { dx: 1, dy: 0 };
 
       if (newDir) {
-        const lastDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
-        if (newDir.dx !== -lastDir.dx || newDir.dy !== -lastDir.dy) {
-          if (inputQueue.length < 2) {
-            inputQueue.push(newDir);
+        if (isMultiplayer && socket) {
+          socket.emit('playerInput', newDir);
+        } else {
+          const lastDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
+          if (newDir.dx !== -lastDir.dx || newDir.dy !== -lastDir.dy) {
+            if (inputQueue.length < 2) {
+              inputQueue.push(newDir);
+            }
           }
         }
       }
