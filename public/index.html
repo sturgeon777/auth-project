@@ -13,6 +13,7 @@
       align-items: flex-start;
       gap: 0px;
       transition: gap 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative; /* 카운트다운 오버레이 기준점 */
     }
     .layout-container.dual-mode {
       gap: 20px;
@@ -47,11 +48,32 @@
       border: 2px solid rgba(255, 255, 255, 0.2);
       border-radius: 8px;
     }
-    .countdown-overlay {
-      font-size: 1.5rem;
-      font-weight: bold;
-      color: #00f0ff;
+    
+    /* 캔버스 중앙 카운트다운 오버레이 */
+    .canvas-overlay-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 800px;
+      height: 800px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
     }
+    .countdown-overlay {
+      font-size: 5rem;
+      font-weight: 900;
+      color: #00f0ff;
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+      animation: pulseCount 1s infinite alternate;
+    }
+    @keyframes pulseCount {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(1.1); opacity: 1; }
+    }
+
     .mode-select-box {
       display: flex;
       gap: 15px;
@@ -109,7 +131,10 @@
     <p id="gameStatus" class="status-text"></p>
 
     <div class="layout-container" id="layoutContainer">
-      <canvas id="gameCanvas" width="800" height="800"></canvas>
+      <div style="position: relative;">
+        <canvas id="gameCanvas" width="800" height="800"></canvas>
+        <div class="canvas-overlay-container" id="canvasOverlayContainer"></div>
+      </div>
       
       <div id="opponentBox" class="opponent-box">
         <h3>OPPONENT</h3>
@@ -249,13 +274,9 @@
         const res = await fetch('/api/stats');
         if (res.ok) {
           const data = await res.json();
-          const totalPlayers = (data && data.totalPlayers !== undefined) ? data.totalPlayers : 0;
-          const gamesPlayed = (data && data.gamesPlayed !== undefined) ? data.gamesPlayed : 0;
-          const hoursPlayed = (data && data.hoursPlayed !== undefined) ? data.hoursPlayed : 0;
-
-          document.getElementById('statTotalPlayers').innerText = Number(totalPlayers).toLocaleString();
-          document.getElementById('statGamesPlayed').innerText = Number(gamesPlayed).toLocaleString();
-          document.getElementById('statHoursPlayed').innerText = hoursPlayed;
+          document.getElementById('statTotalPlayers').innerText = Number(data.totalPlayers || 0).toLocaleString();
+          document.getElementById('statGamesPlayed').innerText = Number(data.gamesPlayed || 0).toLocaleString();
+          document.getElementById('statHoursPlayed').innerText = data.hoursPlayed || 0;
         }
       } catch (e) {
         console.error('Stats load error:', e);
@@ -362,9 +383,16 @@
     }
 
     function showCountdownUI(count) {
-      const statusEl = document.getElementById('gameStatus');
-      if (statusEl) {
-        statusEl.innerHTML = `<span class="countdown-overlay">${count}</span>`;
+      const overlayContainer = document.getElementById('canvasOverlayContainer');
+      if (overlayContainer) {
+        if (count === 'START') {
+          overlayContainer.innerHTML = `<div class="countdown-overlay" style="color: #00ff00;">GO!</div>`;
+          setTimeout(() => {
+            overlayContainer.innerHTML = '';
+          }, 800);
+        } else {
+          overlayContainer.innerHTML = `<div class="countdown-overlay">${count}</div>`;
+        }
       }
     }
 
@@ -411,6 +439,7 @@
       socket.on('matchOver', (data) => {
         isMultiplayer = false;
         setOpponentBoxVisible(false);
+        document.getElementById('canvasOverlayContainer').innerHTML = '';
         document.getElementById('gameStatus').innerText = `게임 종료! 승자: ${data.winner}`;
         fetchGlobalStats();
         loadLeaderboard();
@@ -585,6 +614,7 @@
       }
       isMultiplayer = false;
       setOpponentBoxVisible(false);
+      document.getElementById('canvasOverlayContainer').innerHTML = '';
       
       inputQueue = [];
       snake = [
@@ -719,12 +749,15 @@
       if (!state) return;
       const isLight = document.body.classList.contains('light-mode');
 
-      // 서버에서 전달된 플레이어 데이터를 배열로 일관되게 정형화
       const players = Array.isArray(state.players)
         ? state.players
         : (state.players ? Object.values(state.players) : []);
 
       const currentMode = state.mode || selectedMode;
+
+      // 본인 여부를 식별 (socket.id 혹은 username 기준)
+      const myPlayer = players.find(p => p.username === currentUser || p.id === socket?.id) || players[0];
+      const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
 
       if (currentMode === 'shared') {
         setOpponentBoxVisible(false);
@@ -740,11 +773,12 @@
         }
 
         players.forEach((player) => {
-          const isMe = (player.username === currentUser || player.id === socket?.id);
+          const isMe = (player === myPlayer);
           if (player.snake && Array.isArray(player.snake)) {
             player.snake.forEach((part, index) => {
               const x = part.x * gridSize;
               const y = part.y * gridSize;
+              // 본인은 파란색(#00f0ff/#00a3cc), 상대방은 주황색(#ffaa00/#cc8800) 고정
               ctx.fillStyle = isMe ? (index === 0 ? '#00f0ff' : '#00a3cc') : (index === 0 ? '#ffaa00' : '#cc8800');
               ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
             });
@@ -753,10 +787,6 @@
       } else if (currentMode === 'individual') {
         setOpponentBoxVisible(true);
 
-        const myPlayer = players.find(p => p.username === currentUser || p.id === socket?.id) || players[0];
-        const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
-
-        // 본인 화면 렌더링
         ctx.fillStyle = isLight ? '#ffffff' : '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -766,6 +796,7 @@
           ctx.fillRect(myFood.x * gridSize, myFood.y * gridSize, gridSize - 2, gridSize - 2);
         }
 
+        // 왼쪽 캔버스: 항상 본인 (파란색)
         if (myPlayer && myPlayer.snake && Array.isArray(myPlayer.snake)) {
           myPlayer.snake.forEach((part, index) => {
             ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
@@ -773,7 +804,6 @@
           });
         }
 
-        // 상대방 화면 렌더링 (서브 캔버스)
         const subGridSize = gridSize / 2;
         oppCtx.fillStyle = isLight ? '#f0f0f0' : '#111111';
         oppCtx.fillRect(0, 0, oppCanvas.width, oppCanvas.height);
@@ -784,6 +814,7 @@
           oppCtx.fillRect(oppFood.x * subGridSize, oppFood.y * subGridSize, subGridSize - 1, subGridSize - 1);
         }
 
+        // 오른쪽 캔버스: 항상 상대방 (주황색)
         if (opponentPlayer && opponentPlayer.snake && Array.isArray(opponentPlayer.snake)) {
           opponentPlayer.snake.forEach((part, index) => {
             oppCtx.fillStyle = index === 0 ? '#ffaa00' : '#cc8800';
