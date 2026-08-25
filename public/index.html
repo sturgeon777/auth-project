@@ -744,68 +744,26 @@
       }
     }
 
-    function drawMultiSnake(targetCtx, snakeArray, size, isMe, isLight) {
-      if (currentSkin === 'html') {
-        const bgBoxColor = isLight ? '#f0f0f0' : '#0a0a0a';
-        const borderColor = isLight ? '#d4d4d4' : '#2d2d2d';
-        const textColor = isMe ? (isLight ? '#007799' : '#00f0ff') : (isLight ? '#d97706' : '#ffaa00');
-
-        snakeArray.forEach((part) => {
-          const x = part.x * size;
-          const y = part.y * size;
-          targetCtx.fillStyle = bgBoxColor;
-          targetCtx.fillRect(x, y, size - 1, size - 1);
-          targetCtx.strokeStyle = borderColor;
-          targetCtx.strokeRect(x, y, size - 1, size - 1);
-        });
-
-        snakeArray.forEach((part, index) => {
-          const x = part.x * size;
-          const y = part.y * size;
-          targetCtx.fillStyle = textColor;
-          targetCtx.font = `bold ${Math.floor(size * 0.55)}px monospace`;
-          targetCtx.textAlign = 'center';
-          targetCtx.textBaseline = 'middle';
-          const tag = getHtmlTagForIndex(index, snakeArray.length);
-          targetCtx.fillText(tag, x + size / 2, y + size / 2);
-        });
-      } else if (currentSkin === 'rainbow') {
-        snakeArray.forEach((part, index) => {
-          const x = part.x * size;
-          const y = part.y * size;
-          const distinctHue = isMe ? (180 + ((rainbowHue + index * 10) % 40)) : (20 + ((rainbowHue + index * 10) % 30));
-          targetCtx.fillStyle = `hsl(${distinctHue}, 100%, 50%)`;
-          targetCtx.fillRect(x, y, size - 1, size - 1);
-        });
-      } else {
-        snakeArray.forEach((part, index) => {
-          const x = part.x * size;
-          const y = part.y * size;
-          if (isMe) {
-            targetCtx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
-          } else {
-            targetCtx.fillStyle = index === 0 ? '#ffaa00' : '#cc8800';
-          }
-          targetCtx.fillRect(x, y, size - 2, size - 2);
-        });
-      }
+    // 1대1 전용 스네이크 렌더링 (선택된 스킨과 무관하게 나: 파란색, 상대: 주황색 고정)
+    function drawMultiSnake(targetCtx, snakeArray, size, isMe) {
+      snakeArray.forEach((part, index) => {
+        const x = part.x * size;
+        const y = part.y * size;
+        if (isMe) {
+          targetCtx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
+        } else {
+          targetCtx.fillStyle = index === 0 ? '#ffaa00' : '#cc8800';
+        }
+        targetCtx.fillRect(x, y, size - 2, size - 2);
+      });
     }
 
-    function drawMultiFood(targetCtx, foodObj, size, isLight) {
+    // 1대1 전용 먹이 렌더링 (스킨 무관하게 기본 고정)
+    function drawMultiFood(targetCtx, foodObj, size) {
       const fx = foodObj.x * size;
       const fy = foodObj.y * size;
-      if (currentSkin === 'html') {
-        targetCtx.fillStyle = isLight ? '#fff1f0' : '#ff0055';
-        targetCtx.fillRect(fx, fy, size - 1, size - 1);
-        targetCtx.fillStyle = '#ffffff';
-        targetCtx.font = `900 ${Math.floor(size * 0.65)}px monospace`;
-        targetCtx.textAlign = 'center';
-        targetCtx.textBaseline = 'middle';
-        targetCtx.fillText('<bug>', fx + size / 2, fy + size / 2);
-      } else {
-        targetCtx.fillStyle = '#ff0055';
-        targetCtx.fillRect(fx, fy, size - 2, size - 2);
-      }
+      targetCtx.fillStyle = '#ff0055';
+      targetCtx.fillRect(fx, fy, size - 2, size - 2);
     }
 
     function drawMultiplayerGame(state) {
@@ -821,8 +779,6 @@
       const myPlayer = players.find(p => p.username === currentUser || p.id === socket?.id) || players[0];
       const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
 
-      rainbowHue = (rainbowHue + 4) % 360;
-
       if (currentMode === 'shared') {
         setOpponentBoxVisible(false);
 
@@ -830,13 +786,13 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         if (state.food) {
-          drawMultiFood(ctx, state.food, gridSize, isLight);
+          drawMultiFood(ctx, state.food, gridSize);
         }
 
         players.forEach((player) => {
           const isMe = (player === myPlayer);
           if (player.snake && Array.isArray(player.snake)) {
-            drawMultiSnake(ctx, player.snake, gridSize, isMe, isLight);
+            drawMultiSnake(ctx, player.snake, gridSize, isMe);
           }
         });
       } else if (currentMode === 'individual') {
@@ -846,10 +802,10 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         const myFood = myPlayer?.food || state.food;
-        if (myFood) drawMultiFood(ctx, myFood, gridSize, isLight);
+        if (myFood) drawMultiFood(ctx, myFood, gridSize);
 
         if (myPlayer && myPlayer.snake && Array.isArray(myPlayer.snake)) {
-          drawMultiSnake(ctx, myPlayer.snake, gridSize, true, isLight);
+          drawMultiSnake(ctx, myPlayer.snake, gridSize, true);
         }
 
         const subGridSize = gridSize / 2;
@@ -857,10 +813,10 @@
         oppCtx.fillRect(0, 0, oppCanvas.width, oppCanvas.height);
 
         const oppFood = opponentPlayer?.food || state.food;
-        if (oppFood) drawMultiFood(oppCtx, oppFood, subGridSize, isLight);
+        if (oppFood) drawMultiFood(oppCtx, oppFood, subGridSize);
 
         if (opponentPlayer && opponentPlayer.snake && Array.isArray(opponentPlayer.snake)) {
-          drawMultiSnake(oppCtx, opponentPlayer.snake, subGridSize, false, isLight);
+          drawMultiSnake(oppCtx, opponentPlayer.snake, subGridSize, false);
         }
       }
     }
