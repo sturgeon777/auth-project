@@ -9,11 +9,12 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static(__dirname));
+
+/* 정적 파일 제공 경로를 public 디렉터리로 수정 */
+app.use(express.static(path.join(__dirname, 'public')));
 
 const DB_PATH = path.join(__dirname, 'database.json');
 
-/* 데이터 영구 저장 및 로드 로직 */
 function loadData() {
   if (!fs.existsSync(DB_PATH)) {
     const defaultData = { users: {}, stats: { totalGames: 0, totalPlaySeconds: 0 } };
@@ -31,7 +32,6 @@ function saveData(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-/* 실시간 통계 API */
 app.get('/api/stats', (req, res) => {
   const db = loadData();
   const totalPlayers = Object.keys(db.users).length;
@@ -41,7 +41,6 @@ app.get('/api/stats', (req, res) => {
   res.json({ totalPlayers, gamesPlayed, hoursPlayed });
 });
 
-/* 리더보드 조회 */
 app.get('/api/leaderboard', (req, res) => {
   const db = loadData();
   const sorted = Object.values(db.users)
@@ -51,7 +50,6 @@ app.get('/api/leaderboard', (req, res) => {
   res.json(sorted);
 });
 
-/* 회원가입 */
 app.post('/api/signup', (req, res) => {
   const { username, password } = req.body;
   const db = loadData();
@@ -65,7 +63,6 @@ app.post('/api/signup', (req, res) => {
   res.json({ message: 'Success' });
 });
 
-/* 로그인 */
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   const db = loadData();
@@ -78,7 +75,6 @@ app.post('/api/login', (req, res) => {
   res.json({ token: username, username, highScore: user.highScore });
 });
 
-/* 점수 저장 및 통계 업데이트 */
 app.post('/api/score', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const { score, playSeconds } = req.body;

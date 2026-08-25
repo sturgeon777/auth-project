@@ -9,7 +9,7 @@
 </head>
 <body>
 
-  <!-- 로고 수정: SNAKE.IO -->
+  <!-- 브랜드 로고 -->
   <header class="top-header">
     <div class="brand-logo">SNAKE.IO</div>
   </header>
@@ -30,6 +30,7 @@
     </div>
   </div>
 
+  <!-- 인증 화면 -->
   <div id="authSection" class="auth-container">
     <div class="form-box">
       <h3>Welcome to Snake.io</h3>
@@ -40,6 +41,7 @@
     </div>
   </div>
 
+  <!-- 인게임 화면 -->
   <div id="gameSection" style="display: none;">
     <div class="user-bar">
       <div class="user-info">
@@ -66,6 +68,7 @@
     </div>
   </div>
 
+  <!-- 스킨 선택 모달 -->
   <div id="skinModal" class="modal-overlay">
     <div class="modal-content">
       <h3>SELECT SKIN</h3>
@@ -96,7 +99,6 @@
     let currentSkin = 'neon';
     let gameStartTime = 0;
 
-    // 조작 오작동(제자리 180도 회전 자살) 방지용 입력 큐
     let inputQueue = [];
 
     window.onload = () => {
@@ -104,7 +106,6 @@
       if (token) showGameView();
     };
 
-    /* 실제 집계 통계 가져오기 */
     async function fetchGlobalStats() {
       try {
         const res = await fetch('/api/stats');
@@ -300,7 +301,6 @@
     }
 
     function gameLoop() {
-      // 틱 시작 시 입력 큐에서 이전 조작을 차례대로 꺼내 반영
       if (inputQueue.length > 0) {
         const nextDir = inputQueue.shift();
         dx = nextDir.dx;
@@ -359,8 +359,22 @@
         }
       });
 
-      ctx.fillStyle = '#ff0055';
-      ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+      const fx = food.x * gridSize;
+      const fy = food.y * gridSize;
+
+      if (currentSkin === 'html') {
+        ctx.fillStyle = '#ff0055';
+        ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
+      } else {
+        ctx.fillStyle = '#ff0055';
+        ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
+      }
     }
 
     async function gameOver() {
@@ -387,7 +401,6 @@
       fetchGlobalStats();
     }
 
-    /* 방향키 조작 제어 및 빠른 연속 입력 버그 방지 */
     document.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
       let newDir = null;
@@ -398,7 +411,6 @@
       if (e.key === 'ArrowRight' || key === 'd') newDir = { dx: 1, dy: 0 };
 
       if (newDir) {
-        // 큐의 마지막 입력값 기준으로 반대 방향 역주행 검증
         const lastDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
         if (newDir.dx !== -lastDir.dx || newDir.dy !== -lastDir.dy) {
           if (inputQueue.length < 2) {
