@@ -227,11 +227,18 @@ body.light-mode .btn-tetrio.secondary:hover {
   letter-spacing: 1px;
 }
 
+/* 레이아웃 컨테이너 통합 스타일 */
 .layout-container {
   display: flex;
-  gap: 25px;
-  align-items: flex-start;
   justify-content: center;
+  align-items: flex-start;
+  gap: 0px;
+  position: relative;
+  transition: gap 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.layout-container.dual-mode {
+  gap: 20px;
 }
 
 canvas#gameCanvas {
@@ -250,6 +257,66 @@ body.light-mode canvas#gameCanvas {
   background: #ffffff;
   border-color: #cccccc;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.08);
+}
+
+/* 상대방 캔버스 영역 */
+.opponent-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 0;
+  opacity: 0;
+  transform: scale(0.85);
+  overflow: hidden;
+  transition: max-width 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.4s ease 0.1s,
+              transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.opponent-box.active {
+  max-width: 420px;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.opponent-box h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #ffaa00;
+  white-space: nowrap;
+}
+
+#opponentCanvas {
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+/* 캔버스 중앙 카운트다운 오버레이 */
+.canvas-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 800px;
+  height: 800px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.countdown-overlay {
+  font-size: 5rem;
+  font-weight: 900;
+  color: #00f0ff;
+  text-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+  animation: pulseCount 1s infinite alternate;
+}
+
+@keyframes pulseCount {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 1; }
 }
 
 .leaderboard-box {
@@ -312,6 +379,13 @@ li {
   text-transform: uppercase;
   border-bottom: 2px solid var(--text-black);
   padding-bottom: 10px;
+}
+
+.mode-select-box {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin: 20px 0;
 }
 
 .skin-grid {
