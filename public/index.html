@@ -670,6 +670,7 @@
       }
     }
 
+    // 서버 고유 색상(player.color 또는 playerIndex)을 기준으로 절대 렌더링
     function drawMultiplayerGame(state) {
       if (!state) return;
       const isLight = document.body.classList.contains('light-mode');
@@ -682,6 +683,18 @@
 
       const myPlayer = players.find(p => p.id === socket?.id) || players[0];
       const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
+
+      // 플레이어의 절대 색상 추출 함수
+      const getPlayerColor = (player, index) => {
+        if (player.color) return player.color;
+        // fallback 색상 (P1: 파란색 계열, P2: 주황색 계열)
+        const isP1 = player.playerIndex === 0;
+        if (isP1) {
+          return index === 0 ? '#00f0ff' : '#00a3cc';
+        } else {
+          return index === 0 ? '#ffaa00' : '#cc8800';
+        }
+      };
 
       if (currentMode === 'shared') {
         setOpponentBoxVisible(false);
@@ -697,13 +710,11 @@
         }
 
         players.forEach((player) => {
-          const isMe = (player.id === socket?.id);
           if (player.snake && Array.isArray(player.snake)) {
             player.snake.forEach((part, index) => {
               const x = part.x * gridSize;
               const y = part.y * gridSize;
-              // 서버 전달 고정 색상(player.color) 적용 (없을 경우 기본 색상 사용)
-              ctx.fillStyle = player.color || (isMe ? (index === 0 ? '#00f0ff' : '#00a3cc') : (index === 0 ? '#ffaa00' : '#cc8800'));
+              ctx.fillStyle = getPlayerColor(player, index);
               ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
             });
           }
@@ -722,7 +733,7 @@
 
         if (myPlayer && myPlayer.snake && Array.isArray(myPlayer.snake)) {
           myPlayer.snake.forEach((part, index) => {
-            ctx.fillStyle = myPlayer.color || (index === 0 ? '#00f0ff' : '#00a3cc');
+            ctx.fillStyle = getPlayerColor(myPlayer, index);
             ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
           });
         }
@@ -739,7 +750,7 @@
 
         if (opponentPlayer && opponentPlayer.snake && Array.isArray(opponentPlayer.snake)) {
           opponentPlayer.snake.forEach((part, index) => {
-            oppCtx.fillStyle = opponentPlayer.color || (index === 0 ? '#ffaa00' : '#cc8800');
+            oppCtx.fillStyle = getPlayerColor(opponentPlayer, index);
             oppCtx.fillRect(part.x * subGridSize, part.y * subGridSize, subGridSize - 1, subGridSize - 1);
           });
         }
