@@ -3,302 +3,85 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TETR.IO Style Snake</title>
+  <title>TETR.IO Style Snake Game</title>
+  <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
-  <style>
-    :root {
-      --bg-color: #0b0c10;
-      --panel-bg: rgba(19, 23, 34, 0.85);
-      --panel-border: rgba(255, 255, 255, 0.12);
-      --accent-cyan: #00f0ff;
-      --accent-magenta: #ff0055;
-      --text-main: #ffffff;
-      --text-muted: #8899ac;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      user-select: none;
-    }
-
-    body {
-      background-color: var(--bg-color);
-      background-image: 
-        radial-gradient(circle at 50% 30%, rgba(0, 240, 255, 0.05) 0%, transparent 60%),
-        linear-gradient(180deg, #0b0c10 0%, #050608 100%);
-      color: var(--text-main);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding: 40px 20px;
-    }
-
-    /* TETR.IO 타이틀 글로우 스타일 */
-    h2.main-title {
-      font-size: 2.8rem;
-      font-weight: 900;
-      letter-spacing: 4px;
-      color: var(--accent-cyan);
-      text-shadow: 0 0 15px rgba(0, 240, 255, 0.6), 0 0 30px rgba(0, 240, 255, 0.2);
-      margin-bottom: 35px;
-      font-style: italic;
-      transform: skewX(-6deg);
-    }
-
-    .auth-container {
-      display: flex;
-      justify-content: center;
-      width: 100%;
-    }
-
-    /* TETR.IO 모달 스킨 스타일 */
-    .form-box {
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      border-left: 5px solid var(--accent-cyan);
-      padding: 35px;
-      width: 380px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(12px);
-      border-radius: 4px;
-    }
-
-    .form-box h3 {
-      font-size: 1.4rem;
-      margin-bottom: 6px;
-      letter-spacing: 1.5px;
-      color: #fff;
-    }
-
-    .form-box p.subtitle {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 24px;
-      line-height: 1.4;
-    }
-
-    input, select {
-      width: 100%;
-      padding: 12px 15px;
-      margin-bottom: 15px;
-      background: rgba(7, 8, 10, 0.8);
-      border: 1px solid var(--panel-border);
-      color: #fff;
-      outline: none;
-      border-radius: 3px;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    input:focus, select:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
-    }
-
-    /* TETR.IO 특유의 사선(skew) 액션 버튼 */
-    .btn-tetrio {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      padding: 12px 20px;
-      background: rgba(0, 240, 255, 0.1);
-      border: 1.5px solid var(--accent-cyan);
-      color: var(--accent-cyan);
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      transform: skewX(-12deg);
-      margin-top: 5px;
-      border-radius: 2px;
-    }
-
-    .btn-tetrio span {
-      display: inline-block;
-      transform: skewX(12deg);
-    }
-
-    .btn-tetrio:hover {
-      background: var(--accent-cyan);
-      color: #000;
-      box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
-      transform: skewX(-12deg) scale(1.02);
-    }
-
-    .btn-tetrio.secondary {
-      background: rgba(255, 0, 85, 0.1);
-      border-color: var(--accent-magenta);
-      color: var(--accent-magenta);
-    }
-
-    .btn-tetrio.secondary:hover {
-      background: var(--accent-magenta);
-      color: #fff;
-      box-shadow: 0 0 20px rgba(255, 0, 85, 0.6);
-    }
-
-    #gameSection {
-      width: 100%;
-      max-width: 850px;
-    }
-
-    .user-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--panel-bg);
-      padding: 16px 24px;
-      border: 1px solid var(--panel-border);
-      border-left: 5px solid var(--accent-magenta);
-      margin-bottom: 20px;
-      backdrop-filter: blur(10px);
-      border-radius: 4px;
-    }
-
-    .user-info {
-      font-size: 1.05rem;
-    }
-
-    .user-info strong {
-      color: var(--accent-cyan);
-      text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
-    }
-
-    .controls-panel {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .skin-select-box {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--panel-bg);
-      padding: 6px 16px;
-      border: 1px solid var(--panel-border);
-      backdrop-filter: blur(10px);
-      border-radius: 4px;
-    }
-
-    .skin-select-box select {
-      margin-bottom: 0;
-      width: auto;
-    }
-
-    .status-text {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--accent-cyan);
-      margin-bottom: 18px;
-      min-height: 25px;
-      letter-spacing: 0.5px;
-    }
-
-    .layout-container {
-      display: flex;
-      gap: 20px;
-    }
-
-    /* 인게임 캔버스 네온 보더 */
-    canvas {
-      background: #050608;
-      border: 2px solid var(--panel-border);
-      box-shadow: 0 0 30px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(0, 0, 0, 0.8);
-      border-radius: 4px;
-    }
-
-    /* 리더보드 패널 */
-    .leaderboard-box {
-      flex: 1;
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      padding: 22px;
-      backdrop-filter: blur(10px);
-      border-radius: 4px;
-    }
-
-    .leaderboard-box h3 {
-      color: var(--accent-cyan);
-      font-size: 1.15rem;
-      letter-spacing: 1.5px;
-      margin-bottom: 15px;
-      border-bottom: 1px solid var(--panel-border);
-      padding-bottom: 10px;
-      font-style: italic;
-    }
-
-    ol {
-      padding-left: 20px;
-    }
-
-    li {
-      padding: 10px 0;
-      color: var(--text-muted);
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
-      font-size: 0.95rem;
-    }
-
-    li:first-child {
-      color: #ffd700;
-      font-weight: bold;
-      text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
-    }
-  </style>
 </head>
 <body>
-  <h2 class="main-title">SNAKE.IO</h2>
 
-  <!-- 1. 단일 통합 인증 영역 -->
-  <div id="authSection" class="auth-container">
-    <div class="form-box">
-      <h3>JOIN / LOGIN</h3>
-      <p class="subtitle">계정이 없으면 자동 생성되며, 기존 계정은 로그인됩니다.</p>
-      <input type="text" id="authUser" placeholder="아이디 입력" required>
-      <input type="password" id="authPass" placeholder="비밀번호 입력" required>
-      <button type="button" class="btn-tetrio" onclick="handleAuth()"><span>접속하기</span></button>
+  <!-- 헤더 통계 정보 -->
+  <div class="top-stats">
+    <div class="stat-item">
+      <div class="stat-value">9,571,374</div>
+      <div class="stat-label">Total Players</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">1,067,547,248</div>
+      <div class="stat-label">Games Played</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">50,928,733</div>
+      <div class="stat-label">Hours Played</div>
     </div>
   </div>
 
-  <!-- 2. 게임 영역 -->
+  <!-- 인증 영역 -->
+  <div id="authSection" class="auth-container">
+    <div class="form-box">
+      <h3>Welcome to Snake.io</h3>
+      <p class="subtitle">Enter a username to join, or login with your existing account.</p>
+      <input type="text" id="authUser" placeholder="USERNAME" required>
+      <input type="password" id="authPass" placeholder="PASSWORD" required>
+      <button type="button" class="btn-tetrio" onclick="handleAuth()">JOIN</button>
+    </div>
+  </div>
+
+  <!-- 게임 메인 영역 -->
   <div id="gameSection" style="display: none;">
     <div class="user-bar">
       <div class="user-info">
-        접속자: <strong id="usernameDisplay"></strong>님 (최고점수: <strong id="highScoreDisplay">0</strong>점)
+        USER: <strong id="usernameDisplay"></strong> (BEST SCORE: <strong id="highScoreDisplay">0</strong>)
       </div>
-      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 8px 18px;" onclick="logout()"><span>로그아웃</span></button>
+      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 6px 16px; font-size: 0.9rem;" onclick="logout()">LOGOUT</button>
     </div>
 
     <div class="controls-panel">
-      <button type="button" class="btn-tetrio" style="width: auto;" onclick="startSingleGame()"><span>싱글 플레이</span></button>
-      <button type="button" class="btn-tetrio secondary" style="width: auto;" onclick="joinMatchmaking()"><span>1대1 매치메이킹</span></button>
-      
-      <div class="skin-select-box">
-        <label for="skinSelect" style="font-size: 0.9rem; color: var(--text-muted);">스킨:</label>
-        <select id="skinSelect">
-          <option value="neon">기본 네온</option>
-          <option value="html">HTML 태그 (&lt;head&gt;, &lt;body&gt;, &lt;/body&gt;)</option>
-          <option value="rainbow">무지개 (Rainbow)</option>
-        </select>
-      </div>
+      <button type="button" class="btn-tetrio" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="startSingleGame()">SINGLEPLAYER</button>
+      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking()">1VS1 MATCH</button>
+      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSkinModal()">SKINS</button>
     </div>
 
-    <p id="gameStatus" class="status-text">게임 모드를 선택해주세요. (조작: 방향키 또는 W/A/S/D)</p>
+    <p id="gameStatus" class="status-text">SELECT A GAME MODE TO START (CONTROLS: ARROWS / WASD)</p>
 
     <div class="layout-container">
-      <canvas id="gameCanvas" width="400" height="400"></canvas>
+      <canvas id="gameCanvas" width="600" height="600"></canvas>
       
       <div class="leaderboard-box">
-        <h3>🏆 TOP 10 LEADERBOARD</h3>
+        <h3>TOP 10 LEADERBOARD</h3>
         <ol id="leaderboardList"></ol>
       </div>
+    </div>
+  </div>
+
+  <!-- 스킨 선택 모달 -->
+  <div id="skinModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>SELECT SKIN</h3>
+      <div class="skin-grid">
+        <div class="skin-card" id="card-neon" onclick="selectSkin('neon')">
+          <canvas class="skin-preview-canvas" id="prev-neon" width="100" height="100"></canvas>
+          <h4>NEON</h4>
+        </div>
+        <div class="skin-card" id="card-html" onclick="selectSkin('html')">
+          <canvas class="skin-preview-canvas" id="prev-html" width="100" height="100"></canvas>
+          <h4>HTML TAGS</h4>
+        </div>
+        <div class="skin-card" id="card-rainbow" onclick="selectSkin('rainbow')">
+          <canvas class="skin-preview-canvas" id="prev-rainbow" width="100" height="100"></canvas>
+          <h4>RAINBOW</h4>
+        </div>
+      </div>
+      <button type="button" class="btn-tetrio" onclick="closeSkinModal()">CONFIRM</button>
     </div>
   </div>
 
@@ -308,16 +91,15 @@
     let socket = null;
     let gameInterval = null;
     let rainbowHue = 0;
+    let currentSkin = 'neon';
 
     if (token) showGameView();
 
-    // 통합 인증 처리 (회원가입/로그인 단일창)
     async function handleAuth() {
       const username = document.getElementById('authUser').value.trim();
       const password = document.getElementById('authPass').value.trim();
       if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
 
-      // 1. 회원가입 시도
       const regRes = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,10 +107,9 @@
       });
 
       if (regRes.ok) {
-        alert('새 계정이 생성되었습니다!');
+        alert('새 계정이 생성되었습니다.');
         await performLogin(username, password);
       } else {
-        // 이미 존재하는 계정이면 로그인 시도
         await performLogin(username, password);
       }
     }
@@ -369,25 +150,117 @@
       const res = await fetch('/api/leaderboard');
       const list = await res.json();
       const listEl = document.getElementById('leaderboardList');
-      listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore}점</li>`).join('');
+      listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore} PTS</li>`).join('');
     }
 
-    // --- 싱글 플레이 로직 ---
+    /* HTML 태그 동적 계산 로직 */
+    function getHtmlTagForIndex(index, length) {
+      if (index === 0) return '<head>';
+      if (index === 1) return '</head>';
+      if (index === 2) return '<body>';
+      if (index === length - 1) return '</body>';
+      if (length >= 6 && index === length - 2) return '</div>';
+      return '<div>';
+    }
+
+    /* 스킨 모달 및 미리보기 */
+    function openSkinModal() {
+      document.getElementById('skinModal').style.display = 'flex';
+      updateSkinCardSelection();
+      renderSkinPreviews();
+    }
+
+    function closeSkinModal() {
+      document.getElementById('skinModal').style.display = 'none';
+    }
+
+    function selectSkin(skinName) {
+      currentSkin = skinName;
+      updateSkinCardSelection();
+    }
+
+    function updateSkinCardSelection() {
+      ['neon', 'html', 'rainbow'].forEach(skin => {
+        const card = document.getElementById(`card-${skin}`);
+        if (skin === currentSkin) card.classList.add('selected');
+        else card.classList.remove('selected');
+      });
+    }
+
+    function renderSkinPreviews() {
+      ['neon', 'html', 'rainbow'].forEach(skin => {
+        const cvs = document.getElementById(`prev-${skin}`);
+        const pctx = cvs.getContext('2d');
+        pctx.fillStyle = '#000000';
+        pctx.fillRect(0, 0, 100, 100);
+
+        const dummySnake = [
+          {x: 2, y: 1},
+          {x: 2, y: 2},
+          {x: 2, y: 3},
+          {x: 2, y: 4}
+        ];
+        const size = 20;
+
+        dummySnake.forEach((part, idx) => {
+          const x = part.x * size;
+          const y = part.y * size;
+
+          if (skin === 'rainbow') {
+            pctx.fillStyle = `hsl(${idx * 40}, 100%, 50%)`;
+            pctx.fillRect(x, y, size - 1, size - 1);
+          } else if (skin === 'html') {
+            pctx.fillStyle = idx === 0 ? '#00f0ff' : '#1e293b';
+            pctx.fillRect(x, y, size - 1, size - 1);
+            pctx.fillStyle = idx === 0 ? '#000000' : '#00f0ff';
+            pctx.font = 'bold 6.5px monospace';
+            pctx.textAlign = 'center';
+            pctx.textBaseline = 'middle';
+
+            const tag = getHtmlTagForIndex(idx, dummySnake.length);
+            pctx.fillText(tag, x + size / 2, y + size / 2);
+          } else {
+            pctx.fillStyle = idx === 0 ? '#00f0ff' : '#00a3cc';
+            pctx.fillRect(x, y, size - 2, size - 2);
+          }
+        });
+      });
+    }
+
+    /* 게임 코어 설정 */
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const gridSize = 20;
-    const tileCount = 20;
-    let snake = [{x: 10, y: 10}];
-    let food = {x: 15, y: 15};
+    const tileCount = 30;
+    let snake = [];
+    let food = {x: 5, y: 5};
     let dx = 1, dy = 0;
     let score = 0;
 
+    function generateFood() {
+      let newFood;
+      do {
+        newFood = {
+          x: Math.floor(Math.random() * tileCount),
+          y: Math.floor(Math.random() * tileCount)
+        };
+      } while (snake.some(part => part.x === newFood.x && part.y === newFood.y));
+      return newFood;
+    }
+
     function startSingleGame() {
       if (gameInterval) clearInterval(gameInterval);
-      snake = [{x: 10, y: 10}, {x: 9, y: 10}, {x: 8, y: 10}];
+      
+      snake = [
+        {x: 15, y: 15},
+        {x: 14, y: 15},
+        {x: 13, y: 15},
+        {x: 12, y: 15}
+      ];
       dx = 1; dy = 0; score = 0;
-      document.getElementById('gameStatus').innerText = "싱글 플레이 진행 중...";
-      gameInterval = setInterval(gameLoop, 100);
+      food = generateFood();
+      document.getElementById('gameStatus').innerText = "SINGLEPLAYER GAME IN PROGRESS...";
+      gameInterval = setInterval(gameLoop, 90);
     }
 
     function gameLoop() {
@@ -397,13 +270,14 @@
         return gameOver();
       }
 
+      if (snake.some(part => part.x === head.x && part.y === head.y)) {
+        return gameOver();
+      }
+
       snake.unshift(head);
       if (head.x === food.x && head.y === food.y) {
         score += 10;
-        food = {
-          x: Math.floor(Math.random() * tileCount),
-          y: Math.floor(Math.random() * tileCount)
-        };
+        food = generateFood();
       } else {
         snake.pop();
       }
@@ -412,50 +286,43 @@
     }
 
     function drawGame() {
-      ctx.fillStyle = '#050608';
+      ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const skin = document.getElementById('skinSelect').value;
       rainbowHue = (rainbowHue + 4) % 360;
 
-      // 스네이크 그리기
       snake.forEach((part, index) => {
         const x = part.x * gridSize;
         const y = part.y * gridSize;
 
-        if (skin === 'rainbow') {
+        if (currentSkin === 'rainbow') {
           const hue = (rainbowHue + index * 12) % 360;
           ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
           ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
-        } else if (skin === 'html') {
+        } else if (currentSkin === 'html') {
           ctx.fillStyle = index === 0 ? '#00f0ff' : '#1e293b';
           ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
 
           ctx.fillStyle = index === 0 ? '#000000' : '#00f0ff';
-          ctx.font = 'bold 8px monospace';
+          ctx.font = 'bold 6.5px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
-          let tag = '<body>';
-          if (index === 0) tag = '<head>';
-          else if (index === snake.length - 1) tag = '</body>';
-
+          const tag = getHtmlTagForIndex(index, snake.length);
           ctx.fillText(tag, x + gridSize / 2, y + gridSize / 2);
         } else {
-          // 기본 네온
           ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
           ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
         }
       });
 
-      // 먹이 그리기
       ctx.fillStyle = '#ff0055';
       ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
     }
 
     async function gameOver() {
       clearInterval(gameInterval);
-      document.getElementById('gameStatus').innerText = `게임 오버! 최종 점수: ${score}점`;
+      document.getElementById('gameStatus').innerText = `GAME OVER! SCORE: ${score}`;
       
       await fetch('/api/score', {
         method: 'POST',
@@ -474,7 +341,6 @@
       loadLeaderboard();
     }
 
-    // 키보드 조작 (방향키 + WASD 지원)
     document.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
       if ((e.key === 'ArrowUp' || key === 'w') && dy !== 1) { dx = 0; dy = -1; }
@@ -483,17 +349,16 @@
       if ((e.key === 'ArrowRight' || key === 'd') && dx !== -1) { dx = 1; dy = 0; }
     });
 
-    // --- Socket.io 통신 ---
     function initSocket() {
       socket = io();
       socket.on('match_found', (data) => {
-        document.getElementById('gameStatus').innerText = `매칭 성공! 상대: ${data.players.find(p => p !== currentUser)}`;
+        document.getElementById('gameStatus').innerText = `MATCH FOUND! OPPONENT: ${data.players.find(p => p !== currentUser)}`;
       });
     }
 
     function joinMatchmaking() {
       if (!socket) return;
-      document.getElementById('gameStatus').innerText = "상대 플레이어를 찾는 중...";
+      document.getElementById('gameStatus').innerText = "SEARCHING FOR OPPONENT...";
       socket.emit('join_queue', token);
     }
   </script>
