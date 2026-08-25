@@ -3,34 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TETR.IO Style Snake Game</title>
+  <title>SNAKE.IO</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
-  <!-- 상단 좌측 로고 헤더 -->
+  <!-- 로고 수정: SNAKE.IO -->
   <header class="top-header">
-    <div class="brand-logo">TETR.IO</div>
+    <div class="brand-logo">SNAKE.IO</div>
   </header>
 
-  <!-- 상단 통계 영역 -->
+  <!-- 실시간 데이터 집계 헤더 -->
   <div class="top-stats">
     <div class="stat-item">
-      <div class="stat-value">9,571,374</div>
+      <div class="stat-value" id="statTotalPlayers">0</div>
       <div class="stat-label">Total Players</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value">1,067,547,248</div>
+      <div class="stat-value" id="statGamesPlayed">0</div>
       <div class="stat-label">Games Played</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value">50,928,733</div>
+      <div class="stat-value" id="statHoursPlayed">0</div>
       <div class="stat-label">Hours Played</div>
     </div>
   </div>
 
-  <!-- 인증 영역 -->
   <div id="authSection" class="auth-container">
     <div class="form-box">
       <h3>Welcome to Snake.io</h3>
@@ -41,7 +40,6 @@
     </div>
   </div>
 
-  <!-- 게임 메인 영역 -->
   <div id="gameSection" style="display: none;">
     <div class="user-bar">
       <div class="user-info">
@@ -68,7 +66,6 @@
     </div>
   </div>
 
-  <!-- 스킨 선택 모달 -->
   <div id="skinModal" class="modal-overlay">
     <div class="modal-content">
       <h3>SELECT SKIN</h3>
@@ -97,10 +94,31 @@
     let gameInterval = null;
     let rainbowHue = 0;
     let currentSkin = 'neon';
+    let gameStartTime = 0;
 
-    if (token) showGameView();
+    // 조작 오작동(제자리 180도 회전 자살) 방지용 입력 큐
+    let inputQueue = [];
 
-    /* 인증 로직 수정: 로그인 우선 시도 후 실패 시 회원가입 진행 */
+    window.onload = () => {
+      fetchGlobalStats();
+      if (token) showGameView();
+    };
+
+    /* 실제 집계 통계 가져오기 */
+    async function fetchGlobalStats() {
+      try {
+        const res = await fetch('/api/stats');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('statTotalPlayers').innerText = data.totalPlayers.toLocaleString();
+          document.getElementById('statGamesPlayed').innerText = data.gamesPlayed.toLocaleString();
+          document.getElementById('statHoursPlayed').innerText = data.hoursPlayed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     async function handleAuth() {
       const username = document.getElementById('authUser').value.trim();
       const password = document.getElementById('authPass').value.trim();
@@ -130,7 +148,7 @@
           alert('새 계정이 생성되었습니다.');
           await performLogin(username, password);
         } else {
-          alert('로그인에 실패했거나 이미 존재하는 계정의 비밀번호가 일치하지 않습니다.');
+          alert('비밀번호가 일치하지 않습니다.');
         }
       }
     }
@@ -148,8 +166,6 @@
         localStorage.setItem('jwtToken', token);
         localStorage.setItem('username', currentUser);
         showGameView(data.highScore);
-      } else {
-        alert('비밀번호가 일치하지 않습니다.');
       }
     }
 
@@ -164,7 +180,7 @@
       document.getElementById('usernameDisplay').innerText = currentUser;
       document.getElementById('highScoreDisplay').innerText = highScore;
       loadLeaderboard();
-      initSocket();
+      fetchGlobalStats();
     }
 
     async function loadLeaderboard() {
@@ -249,7 +265,7 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const gridSize = 20;
-    const tileCount = 35; // 700 / 20 = 35
+    const tileCount = 35;
     let snake = [];
     let food = {x: 5, y: 5};
     let dx = 1, dy = 0;
@@ -269,6 +285,7 @@
     function startSingleGame() {
       if (gameInterval) clearInterval(gameInterval);
       
+      inputQueue = [];
       snake = [
         {x: 15, y: 15},
         {x: 14, y: 15},
@@ -276,12 +293,20 @@
         {x: 12, y: 15}
       ];
       dx = 1; dy = 0; score = 0;
+      gameStartTime = Date.now();
       food = generateFood();
       document.getElementById('gameStatus').innerText = "SINGLEPLAYER GAME IN PROGRESS...";
       gameInterval = setInterval(gameLoop, 90);
     }
 
     function gameLoop() {
+      // 틱 시작 시 입력 큐에서 이전 조작을 차례대로 꺼내 반영
+      if (inputQueue.length > 0) {
+        const nextDir = inputQueue.shift();
+        dx = nextDir.dx;
+        dy = nextDir.dy;
+      }
+
       const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
       if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
@@ -322,7 +347,6 @@
           ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
 
           ctx.fillStyle = index === 0 ? '#000000' : '#00f0ff';
-          /* HTML 태그 폰트 크기 확대 (9px 적용) */
           ctx.font = 'bold 9px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -343,13 +367,15 @@
       clearInterval(gameInterval);
       document.getElementById('gameStatus').innerText = `GAME OVER! SCORE: ${score}`;
       
+      const playSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
+
       await fetch('/api/score', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ score })
+        body: JSON.stringify({ score, playSeconds })
       });
 
       const currentHigh = parseInt(document.getElementById('highScoreDisplay').innerText) || 0;
@@ -358,28 +384,29 @@
       }
 
       loadLeaderboard();
+      fetchGlobalStats();
     }
 
+    /* 방향키 조작 제어 및 빠른 연속 입력 버그 방지 */
     document.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
-      if ((e.key === 'ArrowUp' || key === 'w') && dy !== 1) { dx = 0; dy = -1; }
-      if ((e.key === 'ArrowDown' || key === 's') && dy !== -1) { dx = 0; dy = 1; }
-      if ((e.key === 'ArrowLeft' || key === 'a') && dx !== 1) { dx = -1; dy = 0; }
-      if ((e.key === 'ArrowRight' || key === 'd') && dx !== -1) { dx = 1; dy = 0; }
+      let newDir = null;
+
+      if (e.key === 'ArrowUp' || key === 'w') newDir = { dx: 0, dy: -1 };
+      if (e.key === 'ArrowDown' || key === 's') newDir = { dx: 0, dy: 1 };
+      if (e.key === 'ArrowLeft' || key === 'a') newDir = { dx: -1, dy: 0 };
+      if (e.key === 'ArrowRight' || key === 'd') newDir = { dx: 1, dy: 0 };
+
+      if (newDir) {
+        // 큐의 마지막 입력값 기준으로 반대 방향 역주행 검증
+        const lastDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
+        if (newDir.dx !== -lastDir.dx || newDir.dy !== -lastDir.dy) {
+          if (inputQueue.length < 2) {
+            inputQueue.push(newDir);
+          }
+        }
+      }
     });
-
-    function initSocket() {
-      socket = io();
-      socket.on('match_found', (data) => {
-        document.getElementById('gameStatus').innerText = `MATCH FOUND! OPPONENT: ${data.players.find(p => p !== currentUser)}`;
-      });
-    }
-
-    function joinMatchmaking() {
-      if (!socket) return;
-      document.getElementById('gameStatus').innerText = "SEARCHING FOR OPPONENT...";
-      socket.emit('join_queue', token);
-    }
   </script>
 </body>
 </html>

@@ -28,7 +28,6 @@ body {
   padding: 20px;
 }
 
-/* 상단 좌측 로고 스타일링 */
 .top-header {
   width: 100%;
   max-width: 1300px;
@@ -46,7 +45,6 @@ body {
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
 }
 
-/* 상단 통계 영역 */
 .top-stats {
   display: flex;
   justify-content: center;
@@ -76,7 +74,6 @@ body {
   text-transform: uppercase;
 }
 
-/* 인증 영역 */
 .auth-container {
   display: flex;
   justify-content: center;
@@ -153,7 +150,6 @@ input::placeholder {
   background: #444444;
 }
 
-/* 게임 세션 영역 (최대 폭 1300px 확장) */
 #gameSection {
   width: 100%;
   max-width: 1300px;
@@ -198,7 +194,6 @@ input::placeholder {
   justify-content: center;
 }
 
-/* 확장된 게임 캔버스 스타일링 (70vh 적용) */
 canvas#gameCanvas {
   background: #000000;
   border: 3px solid var(--panel-border);
@@ -211,7 +206,6 @@ canvas#gameCanvas {
   image-rendering: crisp-edges;
 }
 
-/* 축소된 리더보드 레이아웃 */
 .leaderboard-box {
   flex: 0 0 280px;
   background: var(--panel-light);
@@ -242,7 +236,6 @@ li {
   font-size: 0.9rem;
 }
 
-/* 스킨 선택 모달 */
 .modal-overlay {
   display: none;
   position: fixed;
