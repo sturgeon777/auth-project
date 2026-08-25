@@ -6,6 +6,29 @@
   <title>SNAKE.IO</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* 서브 캔버스 레이아웃 스타일 보완 */
+    .opponent-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .opponent-box h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #ffaa00;
+    }
+    #opponentCanvas {
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+    }
+    .countdown-overlay {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #00f0ff;
+    }
+  </style>
 </head>
 <body>
 
@@ -48,7 +71,8 @@
 
     <div class="controls-panel">
       <button type="button" class="btn-tetrio" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="startSingleGame()">SINGLEPLAYER</button>
-      <button type="button" class="btn-tetrio secondary" id="btnMatchmaking" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking()">1VS1 MATCH</button>
+      <button type="button" class="btn-tetrio secondary" id="btnMatchmakingShared" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking('shared')">1VS1 SHARED</button>
+      <button type="button" class="btn-tetrio secondary" id="btnMatchmakingIndiv" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking('individual')">1VS1 DUAL</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSkinModal()">SKINS</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSettingsModal()">SETTINGS</button>
     </div>
@@ -58,6 +82,12 @@
     <div class="layout-container">
       <canvas id="gameCanvas" width="800" height="800"></canvas>
       
+      <!-- 상대방 화면 캔버스 (individual 모드용) -->
+      <div id="opponentBox" class="opponent-box" style="display: none;">
+        <h3>OPPONENT</h3>
+        <canvas id="opponentCanvas" width="400" height="400"></canvas>
+      </div>
+
       <div class="leaderboard-box">
         <h3>TOP 10 LEADERBOARD</h3>
         <ol id="leaderboardList"></ol>
@@ -114,6 +144,7 @@
 
     let isMultiplayer = false;
     let isMatchmaking = false;
+    let selectedMode = 'shared';
 
     window.onload = async () => {
       initTheme();
@@ -290,6 +321,13 @@
       }
     }
 
+    function showCountdownUI(count) {
+      const statusEl = document.getElementById('gameStatus');
+      if (statusEl) {
+        statusEl.innerHTML = `<span class="countdown-overlay">${count}</span>`;
+      }
+    }
+
     function initSocket() {
       if (socket) return;
       socket = io();
@@ -298,43 +336,68 @@
         document.getElementById('gameStatus').innerText = data?.message || '상대를 찾는 중입니다...';
       });
 
+      // 카운트다운 이벤트 수신
+      socket.on('countdownTick', (data) => {
+        console.log('카운트다운:', data.count);
+        showCountdownUI(data.count); 
+      });
+
       socket.on('matchFound', (data) => {
         isMatchmaking = false;
         isMultiplayer = true;
-        document.getElementById('btnMatchmaking').innerText = '1VS1 MATCH';
+        resetMatchmakingButtons();
         document.getElementById('gameStatus').innerText = `매칭 완료! 상대: ${data.opponent}`;
         if (gameInterval) clearInterval(gameInterval);
       });
 
+      // 게임 상태 렌더링
       socket.on('gameState', (state) => {
         drawMultiplayerGame(state);
       });
 
       socket.on('matchOver', (data) => {
         isMultiplayer = false;
+        document.getElementById('opponentBox').style.display = 'none';
         document.getElementById('gameStatus').innerText = `게임 종료! 승자: ${data.winner}`;
         fetchGlobalStats();
         loadLeaderboard();
       });
     }
 
-    function joinMatchmaking() {
+    function resetMatchmakingButtons() {
+      document.getElementById('btnMatchmakingShared').innerText = '1VS1 SHARED';
+      document.getElementById('btnMatchmakingIndiv').innerText = '1VS1 DUAL';
+    }
+
+    function joinMatchmaking(mode = 'shared') {
       if (!token || !currentUser) return alert('로그인이 필요합니다.');
 
       initSocket();
 
-      if (isMatchmaking) {
+      if (isMatchmaking && selectedMode === mode) {
         socket.emit('cancelQueue');
         isMatchmaking = false;
-        document.getElementById('btnMatchmaking').innerText = '1VS1 MATCH';
+        resetMatchmakingButtons();
         document.getElementById('gameStatus').innerText = '매칭이 취소되었습니다.';
       } else {
         if (gameInterval) clearInterval(gameInterval);
         isMultiplayer = false;
         isMatchmaking = true;
-        document.getElementById('btnMatchmaking').innerText = 'CANCEL MATCH';
-        document.getElementById('gameStatus').innerText = '상대를 찾는 중...';
-        socket.emit('joinQueue', { username: currentUser, skin: currentSkin, token });
+        selectedMode = mode;
+        
+        resetMatchmakingButtons();
+        const activeBtn = mode === 'shared' ? 'btnMatchmakingShared' : 'btnMatchmakingIndiv';
+        document.getElementById(activeBtn).innerText = 'CANCEL MATCH';
+
+        document.getElementById('gameStatus').innerText = `[${mode.toUpperCase()}] 상대를 찾는 중...`;
+
+        // 1. 대기열 등록 시 모드 선택 ('shared' 또는 'individual')
+        socket.emit('joinQueue', {
+          username: currentUser,
+          skin: currentSkin,
+          token: token,
+          mode: mode
+        });
       }
     }
 
@@ -426,6 +489,9 @@
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const oppCanvas = document.getElementById('opponentCanvas');
+    const oppCtx = oppCanvas.getContext('2d');
+
     const gridSize = 20;
     const tileCount = 40;
     let snake = [];
@@ -449,9 +515,10 @@
       if (isMatchmaking && socket) {
         socket.emit('cancelQueue');
         isMatchmaking = false;
-        document.getElementById('btnMatchmaking').innerText = '1VS1 MATCH';
+        resetMatchmakingButtons();
       }
       isMultiplayer = false;
+      document.getElementById('opponentBox').style.display = 'none';
       
       inputQueue = [];
       snake = [
@@ -582,30 +649,77 @@
       }
     }
 
+    // 3. 멀티플레이어 상태 렌더링
     function drawMultiplayerGame(state) {
       if (!state) return;
       const isLight = document.body.classList.contains('light-mode');
 
-      ctx.fillStyle = isLight ? '#ffffff' : '#000000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (state.mode === 'shared') {
+        // --- SHARED 모드: 캔버스 1개에 모두 렌더링 ---
+        document.getElementById('opponentBox').style.display = 'none';
 
-      if (state.food) {
-        const fx = state.food.x * gridSize;
-        const fy = state.food.y * gridSize;
-        ctx.fillStyle = '#ff0055';
-        ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
-      }
+        ctx.fillStyle = isLight ? '#ffffff' : '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      if (state.players && Array.isArray(state.players)) {
-        state.players.forEach((player) => {
-          const isMe = (player.username === currentUser);
-          player.snake.forEach((part, index) => {
-            const x = part.x * gridSize;
-            const y = part.y * gridSize;
-            ctx.fillStyle = isMe ? (index === 0 ? '#00f0ff' : '#00a3cc') : (index === 0 ? '#ffaa00' : '#cc8800');
-            ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+        if (state.food) {
+          const fx = state.food.x * gridSize;
+          const fy = state.food.y * gridSize;
+          ctx.fillStyle = '#ff0055';
+          ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
+        }
+
+        if (state.players && Array.isArray(state.players)) {
+          state.players.forEach((player) => {
+            const isMe = (player.username === currentUser || player.id === socket?.id);
+            player.snake.forEach((part, index) => {
+              const x = part.x * gridSize;
+              const y = part.y * gridSize;
+              ctx.fillStyle = isMe ? (index === 0 ? '#00f0ff' : '#00a3cc') : (index === 0 ? '#ffaa00' : '#cc8800');
+              ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+            });
           });
-        });
+        }
+      } else if (state.mode === 'individual') {
+        // --- INDIVIDUAL 모드: 내 화면 & 상대 화면 각각 렌더링 ---
+        document.getElementById('opponentBox').style.display = 'flex';
+
+        const myPlayer = state.players?.find(p => p.username === currentUser || p.id === socket?.id);
+        const opponentPlayer = state.players?.find(p => p !== myPlayer);
+
+        // 1) 메인 캔버스: 내 뱀 & 내 먹이
+        ctx.fillStyle = isLight ? '#ffffff' : '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const myFood = myPlayer?.food || state.food;
+        if (myFood) {
+          ctx.fillStyle = '#ff0055';
+          ctx.fillRect(myFood.x * gridSize, myFood.y * gridSize, gridSize - 2, gridSize - 2);
+        }
+
+        if (myPlayer && myPlayer.snake) {
+          myPlayer.snake.forEach((part, index) => {
+            ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
+            ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
+          });
+        }
+
+        // 2) 서브 캔버스: 상대 뱀 & 상대 먹이 (스케일 조정: 800->400px이므로 gridSize / 2)
+        const subGridSize = gridSize / 2;
+        oppCtx.fillStyle = isLight ? '#f0f0f0' : '#111111';
+        oppCtx.fillRect(0, 0, oppCanvas.width, oppCanvas.height);
+
+        const oppFood = opponentPlayer?.food || state.food;
+        if (oppFood) {
+          oppCtx.fillStyle = '#ff0055';
+          oppCtx.fillRect(oppFood.x * subGridSize, oppFood.y * subGridSize, subGridSize - 1, subGridSize - 1);
+        }
+
+        if (opponentPlayer && opponentPlayer.snake) {
+          opponentPlayer.snake.forEach((part, index) => {
+            oppCtx.fillStyle = index === 0 ? '#ffaa00' : '#cc8800';
+            oppCtx.fillRect(part.x * subGridSize, part.y * subGridSize, subGridSize - 1, subGridSize - 1);
+          });
+        }
       }
     }
 
