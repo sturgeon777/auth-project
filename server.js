@@ -190,7 +190,7 @@ function createInitialGameState(roomId, mode, p1, p2) {
       food: generateFood(tileCount),
       players: [
         {
-          id: p1.socket.id,
+          id: p1.socket.id, // 소켓 ID 명시
           username: p1.username,
           snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
           dir: {dx: 1, dy: 0},
@@ -199,7 +199,7 @@ function createInitialGameState(roomId, mode, p1, p2) {
           isDead: false
         },
         {
-          id: p2.socket.id,
+          id: p2.socket.id, // 소켓 ID 명시
           username: p2.username,
           snake: [{x: 30, y: 20}, {x: 31, y: 20}, {x: 32, y: 20}],
           dir: {dx: -1, dy: 0},
@@ -216,7 +216,7 @@ function createInitialGameState(roomId, mode, p1, p2) {
       tileCount,
       players: [
         {
-          id: p1.socket.id,
+          id: p1.socket.id, // 소켓 ID 명시
           username: p1.username,
           snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
           dir: {dx: 1, dy: 0},
@@ -226,7 +226,7 @@ function createInitialGameState(roomId, mode, p1, p2) {
           isDead: false
         },
         {
-          id: p2.socket.id,
+          id: p2.socket.id, // 소켓 ID 명시
           username: p2.username,
           snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
           dir: {dx: 1, dy: 0},
