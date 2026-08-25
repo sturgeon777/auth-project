@@ -112,13 +112,18 @@
     let gameStartTime = 0;
     let inputQueue = [];
 
-    // 페이지 시작 시 즉시 테마 적용
-    initTheme();
-
-    window.onload = () => {
+    window.onload = async () => {
       initTheme();
-      fetchGlobalStats();
-      if (token) showGameView();
+      await fetchGlobalStats();
+
+      token = localStorage.getItem('jwtToken');
+      currentUser = localStorage.getItem('username');
+
+      if (token && currentUser) {
+        await restoreSession();
+      } else {
+        showAuthView();
+      }
     };
 
     function initTheme() {
@@ -170,13 +175,47 @@
         const res = await fetch('/api/stats');
         if (res.ok) {
           const data = await res.json();
-          document.getElementById('statTotalPlayers').innerText = data.totalPlayers.toLocaleString();
-          document.getElementById('statGamesPlayed').innerText = data.gamesPlayed.toLocaleString();
-          document.getElementById('statHoursPlayed').innerText = data.hoursPlayed;
+          const totalPlayers = (data && data.totalPlayers !== undefined) ? data.totalPlayers : 0;
+          const gamesPlayed = (data && data.gamesPlayed !== undefined) ? data.gamesPlayed : 0;
+          const hoursPlayed = (data && data.hoursPlayed !== undefined) ? data.hoursPlayed : 0;
+
+          document.getElementById('statTotalPlayers').innerText = Number(totalPlayers).toLocaleString();
+          document.getElementById('statGamesPlayed').innerText = Number(gamesPlayed).toLocaleString();
+          document.getElementById('statHoursPlayed').innerText = hoursPlayed;
         }
       } catch (e) {
-        console.error(e);
+        console.error('Stats load error:', e);
       }
+    }
+
+    async function restoreSession() {
+      try {
+        const res = await fetch('/api/leaderboard');
+        let userHighScore = 0;
+        if (res.ok) {
+          const list = await res.json();
+          const found = list.find(item => item.username === currentUser);
+          if (found) userHighScore = found.highScore;
+        }
+        showGameView(userHighScore);
+      } catch (e) {
+        console.error('Session restore error:', e);
+        showGameView(0);
+      }
+    }
+
+    function showAuthView() {
+      document.getElementById('authSection').style.display = 'flex';
+      document.getElementById('gameSection').style.display = 'none';
+    }
+
+    function showGameView(highScore = 0) {
+      document.getElementById('authSection').style.display = 'none';
+      document.getElementById('gameSection').style.display = 'block';
+      document.getElementById('usernameDisplay').innerText = currentUser || '';
+      document.getElementById('highScoreDisplay').innerText = highScore;
+      loadLeaderboard();
+      fetchGlobalStats();
     }
 
     async function handleAuth() {
@@ -230,26 +269,22 @@
     }
 
     function logout() {
-      // 테마 설정(theme)은 보존하고 인증 관련 항목만 삭제
       localStorage.removeItem('jwtToken');
       localStorage.removeItem('username');
       location.reload();
     }
 
-    function showGameView(highScore = 0) {
-      document.getElementById('authSection').style.display = 'none';
-      document.getElementById('gameSection').style.display = 'block';
-      document.getElementById('usernameDisplay').innerText = currentUser;
-      document.getElementById('highScoreDisplay').innerText = highScore;
-      loadLeaderboard();
-      fetchGlobalStats();
-    }
-
     async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard');
-      const list = await res.json();
-      const listEl = document.getElementById('leaderboardList');
-      listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore} PTS</li>`).join('');
+      try {
+        const res = await fetch('/api/leaderboard');
+        if (res.ok) {
+          const list = await res.json();
+          const listEl = document.getElementById('leaderboardList');
+          listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore} PTS</li>`).join('');
+        }
+      } catch (e) {
+        console.error('Leaderboard load error:', e);
+      }
     }
 
     function getHtmlTagForIndex(index, length) {
@@ -305,7 +340,7 @@
         if (skin === 'html') {
           const bgBoxColor = isLight ? '#f0f0f0' : '#0a0a0a';
           const textColor = isLight ? '#0451a5' : '#00ff00';
-          const borderColor = isLight ? '#d4d4d4' : '#2d2d2d'; // 라이트/다크 테두리 적용
+          const borderColor = isLight ? '#d4d4d4' : '#2d2d2d';
 
           dummySnake.forEach((part) => {
             pctx.fillStyle = bgBoxColor;
@@ -372,6 +407,8 @@
       gameStartTime = Date.now();
       food = generateFood();
       document.getElementById('gameStatus').innerText = "";
+      
+      drawGame();
       gameInterval = setInterval(gameLoop, 90);
     }
 
@@ -407,6 +444,8 @@
     }
 
     function drawGame() {
+      if (!snake || snake.length === 0) return;
+
       const isLight = document.body.classList.contains('light-mode');
 
       ctx.fillStyle = isLight ? '#ffffff' : '#000000';
@@ -417,9 +456,8 @@
       if (currentSkin === 'html') {
         const bgBoxColor = isLight ? '#f0f0f0' : '#0a0a0a';
         const textColor = isLight ? '#0451a5' : '#00ff00';
-        const borderColor = isLight ? '#e0e0e0' : '#2d2d2d'; // 라이트/다크 테두리 색상 지정
+        const borderColor = isLight ? '#e0e0e0' : '#2d2d2d';
 
-        // Pass 1: 배경 및 테두리 그리기
         snake.forEach((part) => {
           const x = part.x * gridSize;
           const y = part.y * gridSize;
@@ -429,7 +467,6 @@
           ctx.strokeRect(x, y, gridSize - 1, gridSize - 1);
         });
 
-        // Pass 2: 텍스트 출력
         snake.forEach((part, index) => {
           const x = part.x * gridSize;
           const y = part.y * gridSize;
@@ -457,7 +494,6 @@
         });
       }
 
-      // 먹이 렌더링
       const fx = food.x * gridSize;
       const fy = food.y * gridSize;
 
@@ -484,14 +520,18 @@
       
       const playSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
 
-      await fetch('/api/score', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ score, playSeconds })
-      });
+      try {
+        await fetch('/api/score', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ score, playSeconds })
+        });
+      } catch (e) {
+        console.error('Score submit error:', e);
+      }
 
       const currentHigh = parseInt(document.getElementById('highScoreDisplay').innerText) || 0;
       if (score > currentHigh) {
