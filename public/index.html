@@ -2,15 +2,14 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <title>TETR.IO Style Snake Game</title>
+  <title>스네이크 게임</title>
   <link rel="stylesheet" href="/style.css">
-  <!-- Socket.io 클라이언트 라이브러리 자동 로드 -->
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <h2>스네이크 대전 게임</h2>
 
-  <!-- 1. 로그인/회원가입 섹션 -->
+  <!-- 1. 인증 영역 (로그인 전) -->
   <div id="authSection">
     <div class="form-box">
       <h3>1. 회원가입</h3>
@@ -27,7 +26,7 @@
     </div>
   </div>
 
-  <!-- 2. 게임 영역 (로그인 후 노출) -->
+  <!-- 2. 게임 영역 (로그인 후) -->
   <div id="gameSection" style="display: none;">
     <div class="user-bar">
       <span>접속자: <strong id="usernameDisplay"></strong>님 (최고점수: <strong id="highScoreDisplay">0</strong>점)</span>
@@ -57,12 +56,13 @@
     let socket = null;
     let gameInterval = null;
 
-    // 초기 상태 체크
     if (token) showGameView();
 
     async function signup() {
       const username = document.getElementById('regUser').value;
       const password = document.getElementById('regPass').value;
+      if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
+
       const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +75,8 @@
     async function login() {
       const username = document.getElementById('loginUser').value;
       const password = document.getElementById('loginPass').value;
+      if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
+
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,7 +115,7 @@
       listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore}점</li>`).join('');
     }
 
-    // --- 싱글 플레이 스네이크 게임 로직 ---
+    // --- 싱글 플레이 게임 로직 ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const gridSize = 20;
@@ -134,7 +136,6 @@
     function gameLoop() {
       const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
-      // 벽 충돌 감지
       if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
         return gameOver();
       }
@@ -142,7 +143,11 @@
       snake.unshift(head);
       if (head.x === food.x && head.y === food.y) {
         score += 10;
-        food = { Math.floor(Math.random() * tileCount), Math.floor(Math.random() * tileCount) };
+        // 문법 오류 수정 부분: x, y Key 값 부여
+        food = {
+          x: Math.floor(Math.random() * tileCount),
+          y: Math.floor(Math.random() * tileCount)
+        };
       } else {
         snake.pop();
       }
@@ -165,7 +170,6 @@
       clearInterval(gameInterval);
       document.getElementById('gameStatus').innerText = `게임 오버! 최종 점수: ${score}점`;
       
-      // 서버에 점수 전송
       await fetch('/api/score', {
         method: 'POST',
         headers: {
@@ -184,7 +188,7 @@
       if (e.key === 'ArrowRight' && dx !== -1) { dx = 1; dy = 0; }
     });
 
-    // --- Socket.io 실시간 1대1 대전 ---
+    // --- Socket.io 실시간 통신 ---
     function initSocket() {
       socket = io();
       socket.on('match_found', (data) => {
