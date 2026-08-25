@@ -670,7 +670,7 @@
       }
     }
 
-    // 서버 고유 색상(player.color 또는 playerIndex)을 기준으로 절대 렌더링
+    // 1P: 파란색 계열, 2P: 주황색 계열로 절대 렌더링
     function drawMultiplayerGame(state) {
       if (!state) return;
       const isLight = document.body.classList.contains('light-mode');
@@ -684,15 +684,12 @@
       const myPlayer = players.find(p => p.id === socket?.id) || players[0];
       const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
 
-      // 플레이어의 절대 색상 추출 함수
       const getPlayerColor = (player, index) => {
-        if (player.color) return player.color;
-        // fallback 색상 (P1: 파란색 계열, P2: 주황색 계열)
-        const isP1 = player.playerIndex === 0;
+        const isP1 = (player.playerIndex === 0) || (players[0] && player.id === players[0].id);
         if (isP1) {
-          return index === 0 ? '#00f0ff' : '#00a3cc';
+          return index === 0 ? '#00f0ff' : '#00a3cc'; // 1P: 파란색
         } else {
-          return index === 0 ? '#ffaa00' : '#cc8800';
+          return index === 0 ? '#ff8800' : '#cc6600'; // 2P: 주황색
         }
       };
 
