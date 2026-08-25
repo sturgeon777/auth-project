@@ -25,7 +25,25 @@ body {
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  padding: 30px 20px;
+  padding: 20px;
+}
+
+/* 상단 좌측 로고 스타일링 */
+.top-header {
+  width: 100%;
+  max-width: 1300px;
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.brand-logo {
+  font-size: 2.2rem;
+  font-weight: 900;
+  font-family: monospace;
+  letter-spacing: -1px;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
 }
 
 /* 상단 통계 영역 */
@@ -33,9 +51,9 @@ body {
   display: flex;
   justify-content: center;
   gap: 50px;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1300px;
 }
 
 .stat-item {
@@ -135,10 +153,10 @@ input::placeholder {
   background: #444444;
 }
 
-/* 게임 세션 영역 (QHD 대응 최대 폭 1200px) */
+/* 게임 세션 영역 (최대 폭 1300px 확장) */
 #gameSection {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1300px;
 }
 
 .user-bar {
@@ -180,31 +198,32 @@ input::placeholder {
   justify-content: center;
 }
 
-/* QHD 및 반응형 캔버스 스타일링 */
+/* 확장된 게임 캔버스 스타일링 (70vh 적용) */
 canvas#gameCanvas {
   background: #000000;
   border: 3px solid var(--panel-border);
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
-  width: 600px;
-  height: 600px;
-  max-width: 55vh;
-  max-height: 55vh;
+  width: 700px;
+  height: 700px;
+  max-width: 70vh;
+  max-height: 70vh;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
+/* 축소된 리더보드 레이아웃 */
 .leaderboard-box {
-  flex: 1;
+  flex: 0 0 280px;
   background: var(--panel-light);
   color: var(--text-black);
   padding: 20px;
-  height: 600px;
-  max-height: 55vh;
+  height: 700px;
+  max-height: 70vh;
   overflow-y: auto;
 }
 
 .leaderboard-box h3 {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 900;
   letter-spacing: 1px;
   margin-bottom: 15px;
@@ -220,7 +239,7 @@ li {
   padding: 8px 0;
   font-weight: 700;
   border-bottom: 1px solid #cccccc;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 /* 스킨 선택 모달 */

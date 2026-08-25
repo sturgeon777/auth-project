@@ -9,7 +9,12 @@
 </head>
 <body>
 
-  <!-- 헤더 통계 정보 -->
+  <!-- 상단 좌측 로고 헤더 -->
+  <header class="top-header">
+    <div class="brand-logo">TETR.IO</div>
+  </header>
+
+  <!-- 상단 통계 영역 -->
   <div class="top-stats">
     <div class="stat-item">
       <div class="stat-value">9,571,374</div>
@@ -54,7 +59,7 @@
     <p id="gameStatus" class="status-text">SELECT A GAME MODE TO START (CONTROLS: ARROWS / WASD)</p>
 
     <div class="layout-container">
-      <canvas id="gameCanvas" width="600" height="600"></canvas>
+      <canvas id="gameCanvas" width="700" height="700"></canvas>
       
       <div class="leaderboard-box">
         <h3>TOP 10 LEADERBOARD</h3>
@@ -95,22 +100,38 @@
 
     if (token) showGameView();
 
+    /* 인증 로직 수정: 로그인 우선 시도 후 실패 시 회원가입 진행 */
     async function handleAuth() {
       const username = document.getElementById('authUser').value.trim();
       const password = document.getElementById('authPass').value.trim();
       if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
 
-      const regRes = await fetch('/api/signup', {
+      const loginRes = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
-      if (regRes.ok) {
-        alert('새 계정이 생성되었습니다.');
-        await performLogin(username, password);
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        token = data.token;
+        currentUser = data.username;
+        localStorage.setItem('jwtToken', token);
+        localStorage.setItem('username', currentUser);
+        showGameView(data.highScore);
       } else {
-        await performLogin(username, password);
+        const regRes = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (regRes.ok) {
+          alert('새 계정이 생성되었습니다.');
+          await performLogin(username, password);
+        } else {
+          alert('로그인에 실패했거나 이미 존재하는 계정의 비밀번호가 일치하지 않습니다.');
+        }
       }
     }
 
@@ -128,7 +149,7 @@
         localStorage.setItem('username', currentUser);
         showGameView(data.highScore);
       } else {
-        alert('비밀번호가 틀렸습니다.');
+        alert('비밀번호가 일치하지 않습니다.');
       }
     }
 
@@ -153,7 +174,6 @@
       listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore} PTS</li>`).join('');
     }
 
-    /* HTML 태그 동적 계산 로직 */
     function getHtmlTagForIndex(index, length) {
       if (index === 0) return '<head>';
       if (index === 1) return '</head>';
@@ -163,7 +183,6 @@
       return '<div>';
     }
 
-    /* 스킨 모달 및 미리보기 */
     function openSkinModal() {
       document.getElementById('skinModal').style.display = 'flex';
       updateSkinCardSelection();
@@ -213,7 +232,7 @@
             pctx.fillStyle = idx === 0 ? '#00f0ff' : '#1e293b';
             pctx.fillRect(x, y, size - 1, size - 1);
             pctx.fillStyle = idx === 0 ? '#000000' : '#00f0ff';
-            pctx.font = 'bold 6.5px monospace';
+            pctx.font = 'bold 9px monospace';
             pctx.textAlign = 'center';
             pctx.textBaseline = 'middle';
 
@@ -227,11 +246,10 @@
       });
     }
 
-    /* 게임 코어 설정 */
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const gridSize = 20;
-    const tileCount = 30;
+    const tileCount = 35; // 700 / 20 = 35
     let snake = [];
     let food = {x: 5, y: 5};
     let dx = 1, dy = 0;
@@ -304,7 +322,8 @@
           ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
 
           ctx.fillStyle = index === 0 ? '#000000' : '#00f0ff';
-          ctx.font = 'bold 6.5px monospace';
+          /* HTML 태그 폰트 크기 확대 (9px 적용) */
+          ctx.font = 'bold 9px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
