@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    /* 서브 캔버스 레이아웃 스타일 보완 */
     .opponent-box {
       display: flex;
       flex-direction: column;
@@ -27,6 +26,12 @@
       font-size: 1.5rem;
       font-weight: bold;
       color: #00f0ff;
+    }
+    .mode-select-box {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin: 20px 0;
     }
   </style>
 </head>
@@ -71,8 +76,7 @@
 
     <div class="controls-panel">
       <button type="button" class="btn-tetrio" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="startSingleGame()">SINGLEPLAYER</button>
-      <button type="button" class="btn-tetrio secondary" id="btnMatchmakingShared" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking('shared')">1VS1 SHARED</button>
-      <button type="button" class="btn-tetrio secondary" id="btnMatchmakingIndiv" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking('individual')">1VS1 DUAL</button>
+      <button type="button" class="btn-tetrio secondary" id="btnMatchmaking" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openMatchModal()">1 VS 1</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSkinModal()">SKINS</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSettingsModal()">SETTINGS</button>
     </div>
@@ -82,7 +86,6 @@
     <div class="layout-container">
       <canvas id="gameCanvas" width="800" height="800"></canvas>
       
-      <!-- 상대방 화면 캔버스 (individual 모드용) -->
       <div id="opponentBox" class="opponent-box" style="display: none;">
         <h3>OPPONENT</h3>
         <canvas id="opponentCanvas" width="400" height="400"></canvas>
@@ -92,6 +95,18 @@
         <h3>TOP 10 LEADERBOARD</h3>
         <ol id="leaderboardList"></ol>
       </div>
+    </div>
+  </div>
+
+  <!-- 1VS1 모드 선택 모달 -->
+  <div id="matchModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>SELECT 1VS1 MODE</h3>
+      <div class="mode-select-box">
+        <button type="button" class="btn-tetrio" onclick="selectMatchMode('shared')">SHARED (공용 맵)</button>
+        <button type="button" class="btn-tetrio secondary" onclick="selectMatchMode('individual')">DUAL (독립 맵)</button>
+      </div>
+      <button type="button" class="btn-tetrio secondary" style="margin-top: 10px;" onclick="closeMatchModal()">CANCEL</button>
     </div>
   </div>
 
@@ -336,9 +351,7 @@
         document.getElementById('gameStatus').innerText = data?.message || '상대를 찾는 중입니다...';
       });
 
-      // 카운트다운 이벤트 수신
       socket.on('countdownTick', (data) => {
-        console.log('카운트다운:', data.count);
         showCountdownUI(data.count); 
       });
 
@@ -350,7 +363,6 @@
         if (gameInterval) clearInterval(gameInterval);
       });
 
-      // 게임 상태 렌더링
       socket.on('gameState', (state) => {
         drawMultiplayerGame(state);
       });
@@ -364,9 +376,26 @@
       });
     }
 
+    function openMatchModal() {
+      if (isMatchmaking) {
+        joinMatchmaking(selectedMode);
+        return;
+      }
+      document.getElementById('matchModal').style.display = 'flex';
+    }
+
+    function closeMatchModal() {
+      document.getElementById('matchModal').style.display = 'none';
+    }
+
+    function selectMatchMode(mode) {
+      closeMatchModal();
+      joinMatchmaking(mode);
+    }
+
     function resetMatchmakingButtons() {
-      document.getElementById('btnMatchmakingShared').innerText = '1VS1 SHARED';
-      document.getElementById('btnMatchmakingIndiv').innerText = '1VS1 DUAL';
+      const btn = document.getElementById('btnMatchmaking');
+      if (btn) btn.innerText = '1 VS 1';
     }
 
     function joinMatchmaking(mode = 'shared') {
@@ -385,13 +414,9 @@
         isMatchmaking = true;
         selectedMode = mode;
         
-        resetMatchmakingButtons();
-        const activeBtn = mode === 'shared' ? 'btnMatchmakingShared' : 'btnMatchmakingIndiv';
-        document.getElementById(activeBtn).innerText = 'CANCEL MATCH';
-
+        document.getElementById('btnMatchmaking').innerText = 'CANCEL MATCH';
         document.getElementById('gameStatus').innerText = `[${mode.toUpperCase()}] 상대를 찾는 중...`;
 
-        // 1. 대기열 등록 시 모드 선택 ('shared' 또는 'individual')
         socket.emit('joinQueue', {
           username: currentUser,
           skin: currentSkin,
@@ -649,13 +674,11 @@
       }
     }
 
-    // 3. 멀티플레이어 상태 렌더링
     function drawMultiplayerGame(state) {
       if (!state) return;
       const isLight = document.body.classList.contains('light-mode');
 
       if (state.mode === 'shared') {
-        // --- SHARED 모드: 캔버스 1개에 모두 렌더링 ---
         document.getElementById('opponentBox').style.display = 'none';
 
         ctx.fillStyle = isLight ? '#ffffff' : '#000000';
@@ -680,13 +703,11 @@
           });
         }
       } else if (state.mode === 'individual') {
-        // --- INDIVIDUAL 모드: 내 화면 & 상대 화면 각각 렌더링 ---
         document.getElementById('opponentBox').style.display = 'flex';
 
         const myPlayer = state.players?.find(p => p.username === currentUser || p.id === socket?.id);
         const opponentPlayer = state.players?.find(p => p !== myPlayer);
 
-        // 1) 메인 캔버스: 내 뱀 & 내 먹이
         ctx.fillStyle = isLight ? '#ffffff' : '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -703,7 +724,6 @@
           });
         }
 
-        // 2) 서브 캔버스: 상대 뱀 & 상대 먹이 (스케일 조정: 800->400px이므로 gridSize / 2)
         const subGridSize = gridSize / 2;
         oppCtx.fillStyle = isLight ? '#f0f0f0' : '#111111';
         oppCtx.fillRect(0, 0, oppCanvas.width, oppCanvas.height);
