@@ -494,20 +494,33 @@
         });
       }
 
+      // 먹이 렌더링
       const fx = food.x * gridSize;
       const fy = food.y * gridSize;
 
       if (currentSkin === 'html') {
-        ctx.fillStyle = isLight ? '#fff1f0' : '#1e0a10';
-        ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
-        ctx.strokeStyle = isLight ? '#ffa39e' : '#ff0055';
-        ctx.strokeRect(fx, fy, gridSize - 1, gridSize - 1);
+        if (isLight) {
+          ctx.fillStyle = '#fff1f0';
+          ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
+          ctx.strokeStyle = '#ffa39e';
+          ctx.strokeRect(fx, fy, gridSize - 1, gridSize - 1);
 
-        ctx.fillStyle = isLight ? '#cf1322' : '#ff0055';
-        ctx.font = '900 13px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
+          ctx.fillStyle = '#cf1322';
+          ctx.font = '900 13px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
+        } else {
+          // 다크 모드 예전 버전 사과 (솔리드 네온 핑크 배경 + 흰색 글씨)
+          ctx.fillStyle = '#ff0055';
+          ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '900 13px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
+        }
       } else {
         ctx.fillStyle = '#ff0055';
         ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
