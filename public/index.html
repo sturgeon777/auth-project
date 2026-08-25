@@ -7,16 +7,41 @@
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <style>
+    .layout-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0px;
+      transition: gap 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .layout-container.dual-mode {
+      gap: 20px;
+    }
+
     .opponent-box {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 10px;
+      max-width: 0;
+      opacity: 0;
+      transform: scale(0.85);
+      overflow: hidden;
+      transition: max-width 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity 0.4s ease 0.1s,
+                  transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
+    .opponent-box.active {
+      max-width: 420px;
+      opacity: 1;
+      transform: scale(1);
+    }
+
     .opponent-box h3 {
       margin: 0;
       font-size: 1.1rem;
       color: #ffaa00;
+      white-space: nowrap;
     }
     #opponentCanvas {
       border: 2px solid rgba(255, 255, 255, 0.2);
@@ -83,10 +108,10 @@
 
     <p id="gameStatus" class="status-text"></p>
 
-    <div class="layout-container">
+    <div class="layout-container" id="layoutContainer">
       <canvas id="gameCanvas" width="800" height="800"></canvas>
       
-      <div id="opponentBox" class="opponent-box" style="display: none;">
+      <div id="opponentBox" class="opponent-box">
         <h3>OPPONENT</h3>
         <canvas id="opponentCanvas" width="400" height="400"></canvas>
       </div>
@@ -103,8 +128,8 @@
     <div class="modal-content">
       <h3>SELECT 1VS1 MODE</h3>
       <div class="mode-select-box">
-        <button type="button" class="btn-tetrio" onclick="selectMatchMode('shared')">SHARED</button>
-        <button type="button" class="btn-tetrio secondary" onclick="selectMatchMode('individual')">DUAL</button>
+        <button type="button" class="btn-tetrio" onclick="selectMatchMode('shared')">SHARED (공용 맵)</button>
+        <button type="button" class="btn-tetrio secondary" onclick="selectMatchMode('individual')">DUAL (독립 맵)</button>
       </div>
       <button type="button" class="btn-tetrio secondary" style="margin-top: 10px;" onclick="closeMatchModal()">CANCEL</button>
     </div>
@@ -343,6 +368,19 @@
       }
     }
 
+    function setOpponentBoxVisible(visible) {
+      const oppBox = document.getElementById('opponentBox');
+      const layoutContainer = document.getElementById('layoutContainer');
+      
+      if (visible) {
+        layoutContainer.classList.add('dual-mode');
+        oppBox.classList.add('active');
+      } else {
+        layoutContainer.classList.remove('dual-mode');
+        oppBox.classList.remove('active');
+      }
+    }
+
     function initSocket() {
       if (socket) return;
       socket = io();
@@ -361,6 +399,9 @@
         resetMatchmakingButtons();
         document.getElementById('gameStatus').innerText = `매칭 완료! 상대: ${data.opponent}`;
         if (gameInterval) clearInterval(gameInterval);
+
+        if (data.mode) selectedMode = data.mode;
+        setOpponentBoxVisible(selectedMode === 'individual');
       });
 
       socket.on('gameState', (state) => {
@@ -369,7 +410,7 @@
 
       socket.on('matchOver', (data) => {
         isMultiplayer = false;
-        document.getElementById('opponentBox').style.display = 'none';
+        setOpponentBoxVisible(false);
         document.getElementById('gameStatus').innerText = `게임 종료! 승자: ${data.winner}`;
         fetchGlobalStats();
         loadLeaderboard();
@@ -543,7 +584,7 @@
         resetMatchmakingButtons();
       }
       isMultiplayer = false;
-      document.getElementById('opponentBox').style.display = 'none';
+      setOpponentBoxVisible(false);
       
       inputQueue = [];
       snake = [
@@ -678,8 +719,15 @@
       if (!state) return;
       const isLight = document.body.classList.contains('light-mode');
 
-      if (state.mode === 'shared') {
-        document.getElementById('opponentBox').style.display = 'none';
+      // 서버에서 전달된 플레이어 데이터를 배열로 일관되게 정형화
+      const players = Array.isArray(state.players)
+        ? state.players
+        : (state.players ? Object.values(state.players) : []);
+
+      const currentMode = state.mode || selectedMode;
+
+      if (currentMode === 'shared') {
+        setOpponentBoxVisible(false);
 
         ctx.fillStyle = isLight ? '#ffffff' : '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -691,23 +739,24 @@
           ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
         }
 
-        if (state.players && Array.isArray(state.players)) {
-          state.players.forEach((player) => {
-            const isMe = (player.username === currentUser || player.id === socket?.id);
+        players.forEach((player) => {
+          const isMe = (player.username === currentUser || player.id === socket?.id);
+          if (player.snake && Array.isArray(player.snake)) {
             player.snake.forEach((part, index) => {
               const x = part.x * gridSize;
               const y = part.y * gridSize;
               ctx.fillStyle = isMe ? (index === 0 ? '#00f0ff' : '#00a3cc') : (index === 0 ? '#ffaa00' : '#cc8800');
               ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
             });
-          });
-        }
-      } else if (state.mode === 'individual') {
-        document.getElementById('opponentBox').style.display = 'flex';
+          }
+        });
+      } else if (currentMode === 'individual') {
+        setOpponentBoxVisible(true);
 
-        const myPlayer = state.players?.find(p => p.username === currentUser || p.id === socket?.id);
-        const opponentPlayer = state.players?.find(p => p !== myPlayer);
+        const myPlayer = players.find(p => p.username === currentUser || p.id === socket?.id) || players[0];
+        const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
 
+        // 본인 화면 렌더링
         ctx.fillStyle = isLight ? '#ffffff' : '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -717,13 +766,14 @@
           ctx.fillRect(myFood.x * gridSize, myFood.y * gridSize, gridSize - 2, gridSize - 2);
         }
 
-        if (myPlayer && myPlayer.snake) {
+        if (myPlayer && myPlayer.snake && Array.isArray(myPlayer.snake)) {
           myPlayer.snake.forEach((part, index) => {
             ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
             ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
           });
         }
 
+        // 상대방 화면 렌더링 (서브 캔버스)
         const subGridSize = gridSize / 2;
         oppCtx.fillStyle = isLight ? '#f0f0f0' : '#111111';
         oppCtx.fillRect(0, 0, oppCanvas.width, oppCanvas.height);
@@ -734,7 +784,7 @@
           oppCtx.fillRect(oppFood.x * subGridSize, oppFood.y * subGridSize, subGridSize - 1, subGridSize - 1);
         }
 
-        if (opponentPlayer && opponentPlayer.snake) {
+        if (opponentPlayer && opponentPlayer.snake && Array.isArray(opponentPlayer.snake)) {
           opponentPlayer.snake.forEach((part, index) => {
             oppCtx.fillStyle = index === 0 ? '#ffaa00' : '#cc8800';
             oppCtx.fillRect(part.x * subGridSize, part.y * subGridSize, subGridSize - 1, subGridSize - 1);
