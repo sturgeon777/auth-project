@@ -50,12 +50,12 @@
       <button type="button" class="btn-tetrio" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="startSingleGame()">SINGLEPLAYER</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="joinMatchmaking()">1VS1 MATCH</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSkinModal()">SKINS</button>
+      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSettingsModal()">SETTINGS</button>
     </div>
 
     <p id="gameStatus" class="status-text">SELECT A GAME MODE TO START (CONTROLS: ARROWS / WASD)</p>
 
     <div class="layout-container">
-      <!-- 캔버스 해상도 800x800으로 확대 -->
       <canvas id="gameCanvas" width="800" height="800"></canvas>
       
       <div class="leaderboard-box">
@@ -65,6 +65,7 @@
     </div>
   </div>
 
+  <!-- 스킨 선택 모달 -->
   <div id="skinModal" class="modal-overlay">
     <div class="modal-content">
       <h3>SELECT SKIN</h3>
@@ -86,6 +87,21 @@
     </div>
   </div>
 
+  <!-- 테마 설정 모달 -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>SETTINGS</h3>
+      <div class="setting-row">
+        <label>THEME MODE</label>
+        <div class="theme-btn-group">
+          <button type="button" class="btn-tetrio" id="btnThemeDark" onclick="setTheme('dark')">DARK</button>
+          <button type="button" class="btn-tetrio secondary" id="btnThemeLight" onclick="setTheme('light')">LIGHT</button>
+        </div>
+      </div>
+      <button type="button" class="btn-tetrio" style="margin-top: 25px;" onclick="closeSettingsModal()">CONFIRM</button>
+    </div>
+  </div>
+
   <script>
     let token = localStorage.getItem('jwtToken');
     let currentUser = localStorage.getItem('username');
@@ -97,9 +113,50 @@
     let inputQueue = [];
 
     window.onload = () => {
+      initTheme();
       fetchGlobalStats();
       if (token) showGameView();
     };
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      setTheme(savedTheme);
+    }
+
+    function setTheme(mode) {
+      if (mode === 'light') {
+        document.body.classList.add('light-mode');
+      } else {
+        document.body.classList.remove('light-mode');
+      }
+      localStorage.setItem('theme', mode);
+      updateThemeButtons();
+    }
+
+    function updateThemeButtons() {
+      const currentTheme = localStorage.getItem('theme') || 'dark';
+      const btnDark = document.getElementById('btnThemeDark');
+      const btnLight = document.getElementById('btnThemeLight');
+
+      if (!btnDark || !btnLight) return;
+
+      if (currentTheme === 'light') {
+        btnLight.classList.remove('secondary');
+        btnDark.classList.add('secondary');
+      } else {
+        btnDark.classList.remove('secondary');
+        btnLight.classList.add('secondary');
+      }
+    }
+
+    function openSettingsModal() {
+      document.getElementById('settingsModal').style.display = 'flex';
+      updateThemeButtons();
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').style.display = 'none';
+    }
 
     async function fetchGlobalStats() {
       try {
@@ -233,35 +290,41 @@
         ];
         const size = 20;
 
-        dummySnake.forEach((part, idx) => {
-          const x = part.x * size;
-          const y = part.y * size;
-
-          if (skin === 'rainbow') {
-            pctx.fillStyle = `hsl(${idx * 40}, 100%, 50%)`;
-            pctx.fillRect(x, y, size - 1, size - 1);
-          } else if (skin === 'html') {
-            pctx.fillStyle = idx === 0 ? '#00f0ff' : '#1e293b';
-            pctx.fillRect(x, y, size - 1, size - 1);
-            pctx.fillStyle = idx === 0 ? '#000000' : '#00f0ff';
-            pctx.font = '900 13px monospace';
+        if (skin === 'html') {
+          // Pass 1: 배경
+          dummySnake.forEach((part) => {
+            pctx.fillStyle = '#000000';
+            pctx.fillRect(part.x * size, part.y * size, size - 1, size - 1);
+          });
+          // Pass 2: 초록색 텍스트 (11px)
+          dummySnake.forEach((part, idx) => {
+            pctx.fillStyle = '#00ff00';
+            pctx.font = 'bold 11px monospace';
             pctx.textAlign = 'center';
             pctx.textBaseline = 'middle';
-
             const tag = getHtmlTagForIndex(idx, dummySnake.length);
-            pctx.fillText(tag, x + size / 2, y + size / 2);
-          } else {
-            pctx.fillStyle = idx === 0 ? '#00f0ff' : '#00a3cc';
-            pctx.fillRect(x, y, size - 2, size - 2);
-          }
-        });
+            pctx.fillText(tag, part.x * size + size / 2, part.y * size + size / 2);
+          });
+        } else {
+          dummySnake.forEach((part, idx) => {
+            const x = part.x * size;
+            const y = part.y * size;
+            if (skin === 'rainbow') {
+              pctx.fillStyle = `hsl(${idx * 40}, 100%, 50%)`;
+              pctx.fillRect(x, y, size - 1, size - 1);
+            } else {
+              pctx.fillStyle = idx === 0 ? '#00f0ff' : '#00a3cc';
+              pctx.fillRect(x, y, size - 2, size - 2);
+            }
+          });
+        }
       });
     }
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const gridSize = 20;
-    const tileCount = 40; // 800 / 20 = 40
+    const tileCount = 40;
     let snake = [];
     let food = {x: 5, y: 5};
     let dx = 1, dy = 0;
@@ -304,13 +367,10 @@
 
       const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
-      // 벽 충돌 검사
       if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
         return gameOver();
       }
 
-      // 4칸 제자리 회전 충돌 버그 수정:
-      // 이번 틱에 먹이를 먹지 않는다면 꼬리(마지막 마디)는 이동해서 비워지므로 충돌 검사 대상에서 제외
       const willEat = (head.x === food.x && head.y === food.y);
       const collisionCheckBody = willEat ? snake : snake.slice(0, -1);
 
@@ -335,32 +395,44 @@
 
       rainbowHue = (rainbowHue + 4) % 360;
 
-      snake.forEach((part, index) => {
-        const x = part.x * gridSize;
-        const y = part.y * gridSize;
-
-        if (currentSkin === 'rainbow') {
-          const hue = (rainbowHue + index * 12) % 360;
-          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+      if (currentSkin === 'html') {
+        // Pass 1: 모든 마디 배경 일괄 채우기 (검은색)
+        snake.forEach((part) => {
+          const x = part.x * gridSize;
+          const y = part.y * gridSize;
+          ctx.fillStyle = '#000000';
           ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
-        } else if (currentSkin === 'html') {
-          ctx.fillStyle = index === 0 ? '#00f0ff' : '#1e293b';
-          ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
+        });
 
-          ctx.fillStyle = index === 0 ? '#000000' : '#00f0ff';
-          /* HTML 스킨 글씨 크기 15px로 확대 (타일 폭 20px 초과 허용) */
-          ctx.font = '900 15px monospace';
+        // Pass 2: 모든 마디 텍스트 일괄 출력 (초록색, 11px 크기)
+        snake.forEach((part, index) => {
+          const x = part.x * gridSize;
+          const y = part.y * gridSize;
+          ctx.fillStyle = '#00ff00';
+          ctx.font = 'bold 11px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
           const tag = getHtmlTagForIndex(index, snake.length);
           ctx.fillText(tag, x + gridSize / 2, y + gridSize / 2);
-        } else {
-          ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
-          ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
-        }
-      });
+        });
+      } else {
+        snake.forEach((part, index) => {
+          const x = part.x * gridSize;
+          const y = part.y * gridSize;
 
+          if (currentSkin === 'rainbow') {
+            const hue = (rainbowHue + index * 12) % 360;
+            ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+            ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
+          } else {
+            ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
+            ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
+          }
+        });
+      }
+
+      // 먹이 렌더링
       const fx = food.x * gridSize;
       const fy = food.y * gridSize;
 
@@ -369,6 +441,7 @@
         ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
 
         ctx.fillStyle = '#ffffff';
+        /* <bug> 폰트 크기 기존 13px 유지 */
         ctx.font = '900 13px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
