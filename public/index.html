@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SNAKE.IO</title>
+  <title>우주</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -84,7 +84,7 @@
 <body>
 
   <header class="top-header">
-    <div class="brand-logo">SNAKE.IO</div>
+    <div class="brand-logo">우주</div>
   </header>
 
   <div class="top-stats">
@@ -104,7 +104,7 @@
 
   <div id="authSection" class="auth-container">
     <div class="form-box">
-      <h3>Welcome to Snake.io</h3>
+      <h3>우주에 오신 것을 환영합니다</h3>
       <p class="subtitle">Enter a username to join, or login with your existing account.</p>
       <input type="text" id="authUser" placeholder="USERNAME" required>
       <input type="password" id="authPass" placeholder="PASSWORD" required>
@@ -203,7 +203,7 @@
     let gameInterval = null;
     let rainbowHue = 0;
     let currentSkin = 'neon';
-    let gameStartTime = 0;
+    let gameIdPromise = Promise.resolve(null);
     let inputQueue = [];
 
     let isMultiplayer = false;
@@ -284,18 +284,36 @@
 
     async function restoreSession() {
       try {
-        const res = await fetch('/api/leaderboard');
-        let userHighScore = 0;
-        if (res.ok) {
-          const list = await res.json();
-          const found = list.find(item => item.username === currentUser);
-          if (found) userHighScore = found.highScore;
+        const res = await fetch('/api/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          // 만료되었거나 예전 방식의 토큰이면 다시 로그인하게 한다
+          clearSession();
+          showAuthView();
+          return;
         }
-        showGameView(userHighScore);
+        const data = await res.json();
+        currentUser = data.username;
+        showGameView(data.highScore);
       } catch (e) {
         console.error('Session restore error:', e);
         showGameView(0);
       }
+    }
+
+    function saveSession(data) {
+      token = data.token;
+      currentUser = data.username;
+      localStorage.setItem('jwtToken', token);
+      localStorage.setItem('username', currentUser);
+    }
+
+    function clearSession() {
+      token = null;
+      currentUser = null;
+      localStorage.removeItem('jwtToken');
+      localStorage.removeItem('username');
     }
 
     function showAuthView() {
@@ -317,54 +335,48 @@
       const password = document.getElementById('authPass').value.trim();
       if (!username || !password) return alert('아이디와 비밀번호를 입력하세요.');
 
-      const loginRes = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
+      try {
+        const loginRes = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const loginData = await loginRes.json();
 
-      if (loginRes.ok) {
-        const data = await loginRes.json();
-        token = data.token;
-        currentUser = data.username;
-        localStorage.setItem('jwtToken', token);
-        localStorage.setItem('username', currentUser);
-        showGameView(data.highScore);
-      } else {
+        if (loginRes.ok) {
+          saveSession(loginData);
+          showGameView(loginData.highScore);
+          return;
+        }
+        if (loginRes.status === 429) {
+          return alert(loginData.message);
+        }
+
+        // 로그인 실패 시 새 계정 생성을 시도한다
         const regRes = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
         });
+        const regData = await regRes.json();
 
         if (regRes.ok) {
           alert('새 계정이 생성되었습니다.');
-          await performLogin(username, password);
-        } else {
+          saveSession(regData);
+          showGameView(regData.highScore);
+        } else if (regRes.status === 409) {
           alert('비밀번호가 일치하지 않습니다.');
+        } else {
+          alert(regData.message || '계정을 만들 수 없습니다.');
         }
-      }
-    }
-
-    async function performLogin(username, password) {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        token = data.token;
-        currentUser = data.username;
-        localStorage.setItem('jwtToken', token);
-        localStorage.setItem('username', currentUser);
-        showGameView(data.highScore);
+      } catch (e) {
+        console.error('Auth error:', e);
+        alert('서버에 연결할 수 없습니다.');
       }
     }
 
     function logout() {
-      localStorage.removeItem('jwtToken');
-      localStorage.removeItem('username');
+      clearSession();
       location.reload();
     }
 
@@ -374,7 +386,12 @@
         if (res.ok) {
           const list = await res.json();
           const listEl = document.getElementById('leaderboardList');
-          listEl.innerHTML = list.map(item => `<li>${item.username}: ${item.highScore} PTS</li>`).join('');
+          // 아이디에 HTML이 섞여 있어도 실행되지 않도록 textContent로 넣는다
+          listEl.replaceChildren(...list.map(item => {
+            const li = document.createElement('li');
+            li.textContent = `${item.username}: ${item.highScore} PTS`;
+            return li;
+          }));
         }
       } catch (e) {
         console.error('Leaderboard load error:', e);
@@ -410,7 +427,14 @@
 
     function initSocket() {
       if (socket) return;
-      socket = io();
+      socket = io({ auth: { token } });
+
+      socket.on('connect_error', (err) => {
+        if (err.message === 'unauthorized') {
+          alert('로그인이 만료되었습니다. 다시 로그인하세요.');
+          logout();
+        }
+      });
 
       socket.on('waiting', (data) => {
         document.getElementById('gameStatus').innerText = data?.message || '상대를 찾는 중입니다...';
@@ -486,12 +510,7 @@
         document.getElementById('btnMatchmaking').innerText = 'CANCEL MATCH';
         document.getElementById('gameStatus').innerText = `[${mode.toUpperCase()}] 상대를 찾는 중...`;
 
-        socket.emit('joinQueue', {
-          username: currentUser,
-          skin: currentSkin,
-          token: token,
-          mode: mode
-        });
+        socket.emit('joinQueue', { mode });
       }
     }
 
@@ -623,7 +642,14 @@
         {x: 12, y: 15}
       ];
       dx = 1; dy = 0; score = 0;
-      gameStartTime = Date.now();
+      // 서버에 게임 시작을 알려 두어야 끝났을 때 점수가 인정된다
+      gameIdPromise = fetch('/api/game/start', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => data?.gameId || null)
+        .catch(() => null);
       food = generateFood();
       document.getElementById('gameStatus').innerText = "";
       
@@ -825,24 +851,26 @@
       clearInterval(gameInterval);
       document.getElementById('gameStatus').innerText = `GAME OVER! SCORE: ${score}`;
       
-      const playSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
-
       try {
-        await fetch('/api/score', {
+        const gameId = await gameIdPromise;
+        const res = await fetch('/api/score', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ score, playSeconds })
+          body: JSON.stringify({ gameId, score })
         });
+        if (res.status === 401) {
+          alert('로그인이 만료되었습니다. 다시 로그인하세요.');
+          return logout();
+        }
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('highScoreDisplay').innerText = data.highScore;
+        }
       } catch (e) {
         console.error('Score submit error:', e);
-      }
-
-      const currentHigh = parseInt(document.getElementById('highScoreDisplay').innerText) || 0;
-      if (score > currentHigh) {
-        document.getElementById('highScoreDisplay').innerText = score;
       }
 
       loadLeaderboard();
