@@ -3,12 +3,13 @@
 (function (global) {
   'use strict';
 
-  const SIZE = 800;
+  // 게임 공간 크기. 캔버스(800px)보다 넓게 잡고 줄여서 그려야 큰 행성을 발사대에 올려도 잘리지 않는다
+  const SIZE = 1000;
   const C = SIZE / 2;
   const TAU = Math.PI * 2;
 
   const BUBBLE_R = 290;          // 행성이 머물러야 하는 원의 반지름
-  const LAUNCH_R = 338;          // 발사대가 도는 궤도 반지름 (가장 큰 발사 행성도 캔버스 안에 들어오게)
+  const LAUNCH_R = 385;          // 발사대 궤도 반지름 (가장 큰 발사 행성이 원 밖에서 출발하고 화면 안에 들어오게)
   const GRAVITY = 1500;          // 중심으로 끌어당기는 가속도 (px/s²)
   const LAUNCH_SPEED = 700;
   const LAUNCH_COOLDOWN = 0.5;   // 초. 서버 점수 검증도 이 값을 기준으로 한다
@@ -20,16 +21,16 @@
   const SUBSTEPS = 8;
 
   const PLANETS = [
-    { name: '달', r: 21, colors: ['#f2f2f2', '#9a9a9a'], craters: true },
-    { name: '수성', r: 29, colors: ['#e0cdb3', '#8c7355'], craters: true },
-    { name: '화성', r: 38, colors: ['#ff9b6e', '#b5381b'] },
-    { name: '금성', r: 48, colors: ['#ffe8a8', '#d99a2b'] },
-    { name: '지구', r: 60, colors: ['#7fd0ff', '#1e5fbf'], land: true },
-    { name: '해왕성', r: 74, colors: ['#8db0ff', '#2b3fa8'] },
-    { name: '천왕성', r: 90, colors: ['#c6f6f3', '#4fb3b0'] },
-    { name: '토성', r: 108, colors: ['#f7e3b5', '#b8914a'], ring: true },
-    { name: '목성', r: 132, colors: ['#f3d2a8', '#a0643a'], bands: true },
-    { name: '태양', r: 160, colors: ['#fff8b8', '#ff9d00'], glow: true }
+    { name: '달', r: 32, colors: ['#f2f2f2', '#9a9a9a'], craters: true },
+    { name: '수성', r: 44, colors: ['#e0cdb3', '#8c7355'], craters: true },
+    { name: '화성', r: 57, colors: ['#ff9b6e', '#b5381b'] },
+    { name: '금성', r: 72, colors: ['#ffe8a8', '#d99a2b'] },
+    { name: '지구', r: 90, colors: ['#7fd0ff', '#1e5fbf'], land: true },
+    { name: '해왕성', r: 111, colors: ['#8db0ff', '#2b3fa8'] },
+    { name: '천왕성', r: 135, colors: ['#c6f6f3', '#4fb3b0'] },
+    { name: '토성', r: 162, colors: ['#f7e3b5', '#b8914a'], ring: true },
+    { name: '목성', r: 198, colors: ['#f3d2a8', '#a0643a'], bands: true },
+    { name: '태양', r: 240, colors: ['#fff8b8', '#ff9d00'], glow: true }
   ];
   const SPAWN_WEIGHTS = [40, 30, 17, 9, 4]; // 발사할 수 있는 행성은 달~지구, 작은 행성일수록 자주 나온다
   const SUN_BONUS = 100;                     // 태양 두 개가 합쳐져 사라질 때 점수
@@ -450,30 +451,30 @@
 
     if (hud) {
       ctx.fillStyle = isLight ? '#1a1a3a' : '#ffffff';
-      ctx.font = '900 30px "Arial Black", sans-serif';
+      ctx.font = '900 38px "Arial Black", sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText(`SCORE ${view.score}`, 24, 22);
+      ctx.fillText(`SCORE ${view.score}`, 30, 28);
 
       if (view.nextTier !== undefined && view.showLauncher) {
         ctx.textAlign = 'right';
-        ctx.font = '800 18px sans-serif';
-        ctx.fillText('NEXT', SIZE - 24, 26);
-        drawPlanet(ctx, SIZE - 100, 36, view.nextTier, Math.min(PLANETS[view.nextTier].r, 22));
+        ctx.font = '800 22px sans-serif';
+        ctx.fillText('NEXT', SIZE - 30, 33);
+        drawPlanet(ctx, SIZE - 125, 45, view.nextTier, 28);
       }
     }
 
     if (message) {
       ctx.fillStyle = isLight ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.55)';
-      ctx.fillRect(0, C - 90, SIZE, subMessage ? 180 : 130);
+      ctx.fillRect(0, C - 112, SIZE, subMessage ? 225 : 162);
       ctx.fillStyle = isLight ? '#1a1a3a' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '900 56px "Arial Black", sans-serif';
-      ctx.fillText(message, C, C - 28);
+      ctx.font = '900 70px "Arial Black", sans-serif';
+      ctx.fillText(message, C, C - 35);
       if (subMessage) {
-        ctx.font = '700 24px sans-serif';
-        ctx.fillText(subMessage, C, C + 40);
+        ctx.font = '700 30px sans-serif';
+        ctx.fillText(subMessage, C, C + 50);
       }
     }
 
@@ -502,4 +503,5 @@
   global.PlanetGame.drawBoard = drawBoard;
   global.PlanetGame.drawPlanetChain = drawPlanetChain;
   global.PlanetGame.PLANETS = PLANETS;
+  global.PlanetGame.SIZE = SIZE;
 })(window);

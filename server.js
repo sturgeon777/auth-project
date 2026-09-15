@@ -379,7 +379,8 @@ function sanitizeBoard(data) {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isInteger(tier) || tier < 0 || tier >= PLANET_TIERS) {
       return null;
     }
-    bodies.push([Math.round(Math.min(Math.max(x, -200), 1000)), Math.round(Math.min(Math.max(y, -200), 1000)), tier]);
+    // 게임 공간은 1000x1000 (public/planet-game.js의 SIZE)
+    bodies.push([Math.round(Math.min(Math.max(x, -300), 1300)), Math.round(Math.min(Math.max(y, -300), 1300)), tier]);
   }
 
   return {
