@@ -54,7 +54,6 @@
     </div>
 
     <p id="gameStatus" class="status-text"></p>
-    <p class="help-text">마우스로 조준하고 클릭해서 발사 · 키보드는 ←/→ 조준, Space 발사 · 같은 행성끼리 부딪히면 합쳐져요 · 행성이 원 밖에 1.5초 넘게 있으면 끝!</p>
 
     <div class="layout-container" id="layoutContainer">
       <div class="canvas-wrap">
@@ -528,6 +527,8 @@
 
     canvas.addEventListener('pointerdown', (e) => {
       if (!game.playing) return;
+      // 터치로 조준하다 손가락이 캔버스 밖으로 나가도 떼는 순간 발사되도록 포인터를 붙잡아 둔다
+      canvas.setPointerCapture(e.pointerId);
       const p = canvasPoint(e);
       game.aimAt(p.x, p.y);
     });

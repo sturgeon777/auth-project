@@ -8,7 +8,7 @@
   const TAU = Math.PI * 2;
 
   const BUBBLE_R = 290;          // 행성이 머물러야 하는 원의 반지름
-  const LAUNCH_R = 372;          // 발사대가 도는 궤도 반지름
+  const LAUNCH_R = 345;          // 발사대가 도는 궤도 반지름 (가장 큰 발사 행성도 캔버스 안에 들어오게)
   const GRAVITY = 1500;          // 중심으로 끌어당기는 가속도 (px/s²)
   const LAUNCH_SPEED = 700;
   const LAUNCH_COOLDOWN = 0.5;   // 초. 서버 점수 검증도 이 값을 기준으로 한다
@@ -20,16 +20,16 @@
   const SUBSTEPS = 8;
 
   const PLANETS = [
-    { name: '달', r: 14, colors: ['#f2f2f2', '#9a9a9a'], craters: true },
-    { name: '수성', r: 19, colors: ['#e0cdb3', '#8c7355'], craters: true },
-    { name: '화성', r: 25, colors: ['#ff9b6e', '#b5381b'] },
-    { name: '금성', r: 32, colors: ['#ffe8a8', '#d99a2b'] },
-    { name: '지구', r: 40, colors: ['#7fd0ff', '#1e5fbf'], land: true },
-    { name: '해왕성', r: 50, colors: ['#8db0ff', '#2b3fa8'] },
-    { name: '천왕성', r: 61, colors: ['#c6f6f3', '#4fb3b0'] },
-    { name: '토성', r: 73, colors: ['#f7e3b5', '#b8914a'], ring: true },
-    { name: '목성', r: 88, colors: ['#f3d2a8', '#a0643a'], bands: true },
-    { name: '태양', r: 106, colors: ['#fff8b8', '#ff9d00'], glow: true }
+    { name: '달', r: 18, colors: ['#f2f2f2', '#9a9a9a'], craters: true },
+    { name: '수성', r: 25, colors: ['#e0cdb3', '#8c7355'], craters: true },
+    { name: '화성', r: 33, colors: ['#ff9b6e', '#b5381b'] },
+    { name: '금성', r: 42, colors: ['#ffe8a8', '#d99a2b'] },
+    { name: '지구', r: 52, colors: ['#7fd0ff', '#1e5fbf'], land: true },
+    { name: '해왕성', r: 65, colors: ['#8db0ff', '#2b3fa8'] },
+    { name: '천왕성', r: 79, colors: ['#c6f6f3', '#4fb3b0'] },
+    { name: '토성', r: 95, colors: ['#f7e3b5', '#b8914a'], ring: true },
+    { name: '목성', r: 114, colors: ['#f3d2a8', '#a0643a'], bands: true },
+    { name: '태양', r: 138, colors: ['#fff8b8', '#ff9d00'], glow: true }
   ];
   const SPAWN_WEIGHTS = [30, 25, 20, 15, 10]; // 발사할 수 있는 행성은 달~지구
   const SUN_BONUS = 100;                     // 태양 두 개가 합쳐져 사라질 때 점수
