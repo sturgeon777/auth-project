@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>우주</title>
+  <title>행성 게임</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
   <script src="planet-game.js"></script>
@@ -11,7 +11,7 @@
 <body>
 
   <header class="top-header">
-    <div class="brand-logo">우주</div>
+    <div class="brand-logo">행성 게임</div>
   </header>
 
   <div class="top-stats">
@@ -31,7 +31,7 @@
 
   <div id="authSection" class="auth-container">
     <div class="form-box">
-      <h3>우주에 오신 것을 환영합니다</h3>
+      <h3>행성 게임에 오신 것을 환영합니다</h3>
       <p class="subtitle">Enter a username to join, or login with your existing account.</p>
       <input type="text" id="authUser" placeholder="USERNAME" required>
       <input type="password" id="authPass" placeholder="PASSWORD" required>
@@ -585,7 +585,7 @@
       const isLight = isLightMode();
       const message = boardMessage.text
         ? boardMessage
-        : (mode === 'idle' && !isMatchmaking ? { text: '우주', sub: 'SINGLEPLAYER 또는 1 VS 1을 눌러 시작' } : { text: '', sub: '' });
+        : (mode === 'idle' && !isMatchmaking ? { text: '행성 게임', sub: 'SINGLEPLAYER 또는 1 VS 1을 눌러 시작' } : { text: '', sub: '' });
       PlanetGame.drawBoard(ctx, game.view(), { isLight, message: message.text, subMessage: message.sub });
 
       if (mode === 'match') {
