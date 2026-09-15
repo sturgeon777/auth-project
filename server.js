@@ -21,7 +21,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 const DB_PATH = path.join(__dirname, 'database.json');
 const SECRET_PATH = path.join(__dirname, '.jwt-secret');
 const TOKEN_EXPIRES_IN = '7d';
-const TICK_MS = 90;
+const LAUNCH_COOLDOWN_MS = 500;
+const MAX_POINTS_PER_LAUNCH = 30;
 const USERNAME_RE = /^[A-Za-z0-9가-힣_-]{2,16}$/;
 // users 객체의 키로 쓰면 일반 계정처럼 저장되지 않는 이름들
 const RESERVED_USERNAMES = new Set(['__proto__', 'constructor', 'prototype']);
@@ -161,9 +162,10 @@ const MAX_SESSION_AGE_MS = 6 * 60 * 60 * 1000;
 const singleGames = new Map(); // gameId -> { username, startedAt }
 
 // 클라이언트가 보낸 점수는 조작될 수 있어서, 서버가 잰 플레이 시간으로 불가능한 점수를 걸러낸다.
-// 먹이는 최소 3틱에 하나 먹는다고 넉넉하게 잡는다 (실제 평균은 훨씬 느림)
+// 행성은 발사 간격(public/planet-game.js의 LAUNCH_COOLDOWN)마다 하나씩만 쏠 수 있고,
+// 행성 하나로 태양까지 합치기를 끝까지 이어가도 약 28점이 최대라서 발사 수 × 30점으로 제한한다
 function maxPlausibleScore(elapsedMs) {
-  return Math.floor(elapsedMs / TICK_MS / 3) * 10 + 10;
+  return (Math.floor(elapsedMs / LAUNCH_COOLDOWN_MS) + 2) * MAX_POINTS_PER_LAUNCH;
 }
 
 setInterval(() => {
@@ -278,28 +280,15 @@ app.post('/api/score', requireAuth, (req, res) => {
   res.json({ highScore: user.highScore });
 });
 
-// ---------- 1대1 대전 (Socket.io) ----------
+// ---------- 1대1 점수 대결 (Socket.io) ----------
+// 각자 자기 판을 브라우저에서 플레이하고, 서버는 판 정보를 상대에게 전달하면서 점수와 시간을 관리한다.
 
-// 대기열 (모드별 분리: 'shared' | 'individual')
-const queues = {
-  shared: [],
-  individual: []
-};
-const activeMatches = {};
+const MATCH_DURATION_MS = 2 * 60 * 1000;
+const MAX_BOARD_BODIES = 200;
+const PLANET_TIERS = 10;
 
-const VALID_DIRS = [
-  { dx: 1, dy: 0 },
-  { dx: -1, dy: 0 },
-  { dx: 0, dy: 1 },
-  { dx: 0, dy: -1 }
-];
-
-function generateFood(tileCount = 40) {
-  return {
-    x: Math.floor(Math.random() * tileCount),
-    y: Math.floor(Math.random() * tileCount)
-  };
-}
+let waitingQueue = [];
+const matches = new Map(); // roomId -> match
 
 // 소켓 연결 시 토큰을 검증하고, 이후에는 클라이언트가 보낸 이름 대신 검증된 아이디만 사용
 io.use((socket, next) => {
@@ -310,317 +299,162 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  socket.on('joinQueue', (data) => {
-    const mode = data?.mode === 'individual' ? 'individual' : 'shared';
+  socket.on('joinQueue', () => {
+    if (socket.data.roomId) return;
     const username = socket.data.username;
 
-    // 기존 중복 참가 제거 (같은 계정의 다른 탭 포함 — 자기 자신과 매칭되는 것 방지)
-    removeFromQueues(socket.id);
-    ['shared', 'individual'].forEach(m => {
-      queues[m] = queues[m].filter(item => item.username !== username);
-    });
+    // 같은 계정의 다른 탭이 대기 중이면 빼서 자기 자신과 매칭되지 않게 한다
+    waitingQueue = waitingQueue.filter(item => item.socket.id !== socket.id && item.username !== username);
+    waitingQueue.push({ socket, username });
+    socket.emit('waiting', { message: '상대를 찾는 중입니다...' });
 
-    queues[mode].push({
-      socket,
-      username,
-      mode
-    });
-
-    socket.emit('waiting', { message: '상대를 찾는 중입니다...', mode });
-
-    // 2명 매칭 조건
-    if (queues[mode].length >= 2) {
-      const p1 = queues[mode].shift();
-      const p2 = queues[mode].shift();
-      const roomId = `room_${p1.socket.id}_${p2.socket.id}`;
-
-      p1.socket.join(roomId);
-      p2.socket.join(roomId);
-
-      const gameState = createInitialGameState(roomId, mode, p1, p2);
-
-      // 각 소켓에 playerIndex(0, 1) 포함하여 이벤트 전송
-      p1.socket.emit('matchFound', { opponent: p2.username, mode, playerIndex: 0 });
-      p2.socket.emit('matchFound', { opponent: p1.username, mode, playerIndex: 1 });
-
-      activeMatches[roomId] = {
-        gameState,
-        mode,
-        interval: null,
-        countdownInterval: null
-      };
-
-      // 3-2-1 카운트다운 시작
-      startCountdown(roomId);
+    if (waitingQueue.length >= 2) {
+      startMatch(waitingQueue.shift(), waitingQueue.shift());
     }
   });
 
   socket.on('cancelQueue', () => {
-    removeFromQueues(socket.id);
+    removeFromQueue(socket.id);
   });
 
-  socket.on('playerInput', (dir) => {
-    // 한 칸짜리 상하좌우 이동만 허용 (순간이동, 정지 방지)
-    if (!dir || !VALID_DIRS.some(d => d.dx === dir.dx && d.dy === dir.dy)) return;
-
-    for (const roomId in activeMatches) {
-      const match = activeMatches[roomId];
-      const player = match.gameState.players.find(p => p.id === socket.id);
-      if (player) {
-        if (dir.dx !== -player.dir.dx || dir.dy !== -player.dir.dy) {
-          player.nextDir = { dx: dir.dx, dy: dir.dy };
-        }
-        break;
-      }
-    }
+  socket.on('boardUpdate', (data) => {
+    handleBoardUpdate(socket, data);
   });
 
   socket.on('disconnect', () => {
-    removeFromQueues(socket.id);
-
-    for (const roomId in activeMatches) {
-      const match = activeMatches[roomId];
-      const playerIndex = match.gameState.players.findIndex(p => p.id === socket.id);
-      if (playerIndex !== -1) {
-        const winner = match.gameState.players[1 - playerIndex];
-        const winnerName = winner ? winner.username : 'Unknown';
-
-        io.to(roomId).emit('matchOver', { winner: winnerName, reason: 'opponent_disconnected' });
-        cleanUpMatch(roomId);
-        recordStats(winnerName);
-        break;
-      }
+    removeFromQueue(socket.id);
+    const match = matches.get(socket.data.roomId);
+    if (match) {
+      const opponent = match.players.find(p => p.socket.id !== socket.id);
+      finishMatch(match, 'opponent_left', opponent.username);
     }
   });
 });
 
-function removeFromQueues(socketId) {
-  ['shared', 'individual'].forEach(m => {
-    const idx = queues[m].findIndex(item => item.socket.id === socketId);
-    if (idx !== -1) queues[m].splice(idx, 1);
+function removeFromQueue(socketId) {
+  waitingQueue = waitingQueue.filter(item => item.socket.id !== socketId);
+}
+
+function startMatch(p1, p2) {
+  const roomId = `room_${p1.socket.id}_${p2.socket.id}`;
+  const match = {
+    roomId,
+    players: [p1, p2].map(p => ({ socket: p.socket, username: p.username, score: 0, over: false })),
+    startedAt: null,
+    finished: false,
+    timers: []
+  };
+  matches.set(roomId, match);
+
+  match.players.forEach((p, i) => {
+    p.socket.join(roomId);
+    p.socket.data.roomId = roomId;
+    p.socket.emit('matchFound', { opponent: match.players[1 - i].username, durationMs: MATCH_DURATION_MS });
   });
-}
 
-function createInitialGameState(roomId, mode, p1, p2) {
-  const tileCount = 40;
-
-  const player1Obj = {
-    id: p1.socket.id,
-    username: p1.username,
-    playerIndex: 0,
-    color: '#3b82f6', // Player 1 고정 색상: 파란색
-    snake: [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}],
-    dir: {dx: 1, dy: 0},
-    nextDir: {dx: 1, dy: 0},
-    score: 0,
-    isDead: false
-  };
-
-  const player2Obj = {
-    id: p2.socket.id,
-    username: p2.username,
-    playerIndex: 1,
-    color: '#ef4444', // Player 2 고정 색상: 빨간색
-    snake: [{x: 30, y: 20}, {x: 31, y: 20}, {x: 32, y: 20}],
-    dir: {dx: -1, dy: 0},
-    nextDir: {dx: -1, dy: 0},
-    score: 0,
-    isDead: false
-  };
-
-  if (mode === 'shared') {
-    return {
-      roomId,
-      mode,
-      tileCount,
-      food: generateFood(tileCount),
-      players: [player1Obj, player2Obj]
-    };
-  } else {
-    player1Obj.food = generateFood(tileCount);
-    player2Obj.food = generateFood(tileCount);
-
-    player2Obj.snake = [{x: 10, y: 20}, {x: 9, y: 20}, {x: 8, y: 20}];
-    player2Obj.dir = {dx: 1, dy: 0};
-    player2Obj.nextDir = {dx: 1, dy: 0};
-
-    return {
-      roomId,
-      mode,
-      tileCount,
-      players: [player1Obj, player2Obj]
-    };
-  }
-}
-
-function startCountdown(roomId) {
-  const match = activeMatches[roomId];
+  // 3-2-1 카운트다운 후 시작
   let count = 3;
-
   io.to(roomId).emit('countdownTick', { count });
-
-  match.countdownInterval = setInterval(() => {
+  const countdown = setInterval(() => {
     count -= 1;
     if (count > 0) {
       io.to(roomId).emit('countdownTick', { count });
-    } else {
-      clearInterval(match.countdownInterval);
-      io.to(roomId).emit('countdownTick', { count: 'START' });
-
-      match.interval = setInterval(() => {
-        updateMatchState(roomId);
-      }, TICK_MS);
+      return;
     }
+    clearInterval(countdown);
+    match.startedAt = Date.now();
+    io.to(roomId).emit('countdownTick', { count: 'START', remainingMs: MATCH_DURATION_MS });
+    match.timers.push(setTimeout(() => finishMatch(match, 'time_up'), MATCH_DURATION_MS));
   }, 1000);
+  match.timers.push(countdown);
 }
 
-function updateMatchState(roomId) {
-  const match = activeMatches[roomId];
-  if (!match) return;
+function sanitizeBoard(data) {
+  if (!data || !Array.isArray(data.b) || data.b.length > MAX_BOARD_BODIES) return null;
 
-  const state = match.gameState;
-  if (state.mode === 'shared') {
-    updateSharedMatch(roomId, match);
-  } else {
-    updateIndividualMatch(roomId, match);
+  const bodies = [];
+  for (const item of data.b) {
+    if (!Array.isArray(item) || item.length !== 3) return null;
+    const [x, y, tier] = item;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isInteger(tier) || tier < 0 || tier >= PLANET_TIERS) {
+      return null;
+    }
+    bodies.push([Math.round(Math.min(Math.max(x, -200), 1000)), Math.round(Math.min(Math.max(y, -200), 1000)), tier]);
   }
-}
 
-// 1. 공용 맵 모드 (먼저 죽는 사람이 패배)
-function updateSharedMatch(roomId, match) {
-  const state = match.gameState;
-  let gameOver = false;
-  let winner = null;
-
-  state.players.forEach(p => {
-    if (p.isDead) return;
-    p.dir = p.nextDir;
-    const head = { x: p.snake[0].x + p.dir.dx, y: p.snake[0].y + p.dir.dy };
-
-    if (head.x < 0 || head.x >= state.tileCount || head.y < 0 || head.y >= state.tileCount) {
-      p.isDead = true;
-    }
-
-    p.snake.unshift(head);
-
-    if (head.x === state.food.x && head.y === state.food.y) {
-      p.score += 10;
-      state.food = generateFood(state.tileCount);
-    } else {
-      p.snake.pop();
-    }
-  });
-
-  const [p1, p2] = state.players;
-  const checkCollision = (head, snake, isSelf) => {
-    const body = isSelf ? snake.slice(1) : snake;
-    return body.some(part => part.x === head.x && part.y === head.y);
+  return {
+    b: bodies,
+    a: Number.isFinite(data.a) ? Math.round(data.a * 100) / 100 : 0,
+    c: Number.isInteger(data.c) && data.c >= 0 && data.c < PLANET_TIERS ? data.c : 0,
+    s: Number.isInteger(data.s) ? data.s : 0,
+    o: data.o === true
   };
+}
 
-  if (!p1.isDead) {
-    if (checkCollision(p1.snake[0], p1.snake, true) || checkCollision(p1.snake[0], p2.snake, false)) {
-      p1.isDead = true;
-    }
-  }
-  if (!p2.isDead) {
-    if (checkCollision(p2.snake[0], p2.snake, true) || checkCollision(p2.snake[0], p1.snake, false)) {
-      p2.isDead = true;
-    }
-  }
+function handleBoardUpdate(socket, data) {
+  const match = matches.get(socket.data.roomId);
+  if (!match || !match.startedAt || match.finished) return;
 
-  if (p1.isDead || p2.isDead) {
-    gameOver = true;
-    if (p1.isDead && p2.isDead) winner = 'DRAW';
-    else if (p1.isDead) winner = p2.username;
-    else winner = p1.username;
-  }
+  const player = match.players.find(p => p.socket.id === socket.id);
+  if (!player || player.over) return;
 
-  if (gameOver) {
-    endMatch(roomId, winner);
-  } else {
-    io.to(roomId).emit('gameState', state);
+  const board = sanitizeBoard(data);
+  if (!board) return;
+
+  // 점수는 줄어들 수 없고, 경과 시간으로 가능한 점수를 넘으면 인정하지 않는다
+  if (board.s < player.score || board.s > maxPlausibleScore(Date.now() - match.startedAt)) {
+    board.s = player.score;
+  }
+  player.score = board.s;
+  if (board.o) player.over = true;
+
+  socket.to(match.roomId).emit('opponentBoard', board);
+  checkMatchEnd(match);
+}
+
+function checkMatchEnd(match) {
+  const [p1, p2] = match.players;
+  if (p1.over && p2.over) {
+    finishMatch(match, 'both_over');
+  } else if ((p1.over && p2.score > p1.score) || (p2.over && p1.score > p2.score)) {
+    // 먼저 끝난 사람의 점수를 남은 사람이 이미 넘었으면 더 기다릴 필요가 없다
+    finishMatch(match, 'overtaken');
   }
 }
 
-// 2. 독립 맵 모드 (점수 무관, 먼저 죽는 사람이 패배)
-function updateIndividualMatch(roomId, match) {
-  const state = match.gameState;
-  let gameOver = false;
-  let winner = null;
+function finishMatch(match, reason, forcedWinner) {
+  if (match.finished) return;
+  match.finished = true;
+  match.timers.forEach(clearTimeout);
 
-  state.players.forEach(p => {
-    if (p.isDead) return;
-    p.dir = p.nextDir;
-    const head = { x: p.snake[0].x + p.dir.dx, y: p.snake[0].y + p.dir.dy };
+  const [p1, p2] = match.players;
+  const winner = forcedWinner || (p1.score === p2.score ? 'DRAW' : (p1.score > p2.score ? p1 : p2).username);
 
-    // 벽 충돌
-    if (head.x < 0 || head.x >= state.tileCount || head.y < 0 || head.y >= state.tileCount) {
-      p.isDead = true;
-    }
-
-    // 자기 자신 몸통 충돌
-    if (p.snake.slice(1).some(part => part.x === head.x && part.y === head.y)) {
-      p.isDead = true;
-    }
-
-    p.snake.unshift(head);
-
-    // 각자 개별 먹이 처리
-    if (head.x === p.food.x && head.y === p.food.y) {
-      p.score += 10;
-      p.food = generateFood(state.tileCount);
-    } else {
-      p.snake.pop();
-    }
+  io.to(match.roomId).emit('matchOver', {
+    winner,
+    reason,
+    scores: match.players.map(p => ({ username: p.username, score: p.score }))
   });
 
-  const [p1, p2] = state.players;
+  match.players.forEach(p => {
+    p.socket.leave(match.roomId);
+    delete p.socket.data.roomId;
+  });
+  matches.delete(match.roomId);
 
-  // 한 명이라도 탈락 시 먼저 죽은 사람 패배 (점수 상관 없음)
-  if (p1.isDead || p2.isDead) {
-    gameOver = true;
-    if (p1.isDead && p2.isDead) {
-      winner = 'DRAW';
-    } else if (p1.isDead) {
-      winner = p2.username;
-    } else {
-      winner = p1.username;
-    }
-  }
-
-  if (gameOver) {
-    endMatch(roomId, winner);
-  } else {
-    io.to(roomId).emit('gameState', state);
-  }
+  recordMatch(match);
 }
 
-function endMatch(roomId, winner) {
-  const match = activeMatches[roomId];
-  if (!match) return;
+function recordMatch(match) {
+  if (!match.startedAt) return;
 
-  const [p1, p2] = match.gameState.players;
-  recordStats(winner, p1, p2);
-
-  io.to(roomId).emit('matchOver', { winner });
-  cleanUpMatch(roomId);
-}
-
-function cleanUpMatch(roomId) {
-  const match = activeMatches[roomId];
-  if (match) {
-    if (match.interval) clearInterval(match.interval);
-    if (match.countdownInterval) clearInterval(match.countdownInterval);
-    delete activeMatches[roomId];
-  }
-}
-
-function recordStats(winner, p1, p2) {
   const db = loadData();
+  const elapsedSeconds = Math.round((Date.now() - match.startedAt) / 1000);
   db.stats.totalGames = (db.stats.totalGames || 0) + 1;
+  db.stats.totalPlaySeconds = (db.stats.totalPlaySeconds || 0) + elapsedSeconds * match.players.length;
 
-  [p1, p2].forEach(p => {
-    const user = p && getUser(db, p.username);
+  match.players.forEach(p => {
+    const user = getUser(db, p.username);
     if (user && p.score > user.highScore) user.highScore = p.score;
   });
 

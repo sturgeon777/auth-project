@@ -6,80 +6,7 @@
   <title>우주</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
-  <style>
-    .layout-container {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      gap: 0px;
-      transition: gap 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-    }
-    .layout-container.dual-mode {
-      gap: 20px;
-    }
-
-    .opponent-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      max-width: 0;
-      opacity: 0;
-      transform: scale(0.85);
-      overflow: hidden;
-      transition: max-width 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-                  opacity 0.4s ease 0.1s,
-                  transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .opponent-box.active {
-      max-width: 420px;
-      opacity: 1;
-      transform: scale(1);
-    }
-
-    .opponent-box h3 {
-      margin: 0;
-      font-size: 1.1rem;
-      color: #ffaa00;
-      white-space: nowrap;
-    }
-    #opponentCanvas {
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-    }
-    
-    .canvas-overlay-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 800px;
-      height: 800px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      pointer-events: none;
-      z-index: 10;
-    }
-    .countdown-overlay {
-      font-size: 5rem;
-      font-weight: 900;
-      color: #00f0ff;
-      text-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
-      animation: pulseCount 1s infinite alternate;
-    }
-    @keyframes pulseCount {
-      0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(1.1); opacity: 1; }
-    }
-
-    .mode-select-box {
-      display: flex;
-      gap: 15px;
-      justify-content: center;
-      margin: 20px 0;
-    }
-  </style>
+  <script src="planet-game.js"></script>
 </head>
 <body>
 
@@ -122,62 +49,30 @@
 
     <div class="controls-panel">
       <button type="button" class="btn-tetrio" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="startSingleGame()">SINGLEPLAYER</button>
-      <button type="button" class="btn-tetrio secondary" id="btnMatchmaking" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openMatchModal()">1 VS 1</button>
-      <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSkinModal()">SKINS</button>
+      <button type="button" class="btn-tetrio secondary" id="btnMatchmaking" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="toggleMatchmaking()">1 VS 1</button>
       <button type="button" class="btn-tetrio secondary" style="width: auto; padding: 10px 20px; font-size: 0.95rem;" onclick="openSettingsModal()">SETTINGS</button>
     </div>
 
     <p id="gameStatus" class="status-text"></p>
+    <p class="help-text">마우스로 조준하고 클릭해서 발사 · 키보드는 ←/→ 조준, Space 발사 · 같은 행성끼리 부딪히면 합쳐져요 · 행성이 원 밖에 1.5초 넘게 있으면 끝!</p>
 
     <div class="layout-container" id="layoutContainer">
-      <div style="position: relative;">
+      <div class="canvas-wrap">
         <canvas id="gameCanvas" width="800" height="800"></canvas>
         <div class="canvas-overlay-container" id="canvasOverlayContainer"></div>
       </div>
-      
+
       <div id="opponentBox" class="opponent-box">
-        <h3>OPPONENT</h3>
+        <h3 id="opponentTitle">OPPONENT</h3>
         <canvas id="opponentCanvas" width="400" height="400"></canvas>
       </div>
 
       <div class="leaderboard-box">
         <h3>TOP 10 LEADERBOARD</h3>
         <ol id="leaderboardList"></ol>
+        <h3 class="chain-title">PLANETS</h3>
+        <canvas id="planetChain" width="240" height="130"></canvas>
       </div>
-    </div>
-  </div>
-
-  <!-- 1VS1 모드 선택 모달 -->
-  <div id="matchModal" class="modal-overlay">
-    <div class="modal-content">
-      <h3>SELECT 1VS1 MODE</h3>
-      <div class="mode-select-box">
-        <button type="button" class="btn-tetrio" onclick="selectMatchMode('shared')">SHARED</button>
-        <button type="button" class="btn-tetrio secondary" onclick="selectMatchMode('individual')">DUAL</button>
-      </div>
-      <button type="button" class="btn-tetrio secondary" style="margin-top: 10px;" onclick="closeMatchModal()">CANCEL</button>
-    </div>
-  </div>
-
-  <!-- 스킨 선택 모달 -->
-  <div id="skinModal" class="modal-overlay">
-    <div class="modal-content">
-      <h3>SELECT SKIN</h3>
-      <div class="skin-grid">
-        <div class="skin-card" id="card-neon" onclick="selectSkin('neon')">
-          <canvas class="skin-preview-canvas" id="prev-neon" width="100" height="100"></canvas>
-          <h4>NEON</h4>
-        </div>
-        <div class="skin-card" id="card-html" onclick="selectSkin('html')">
-          <canvas class="skin-preview-canvas" id="prev-html" width="100" height="100"></canvas>
-          <h4>HTML TAGS</h4>
-        </div>
-        <div class="skin-card" id="card-rainbow" onclick="selectSkin('rainbow')">
-          <canvas class="skin-preview-canvas" id="prev-rainbow" width="100" height="100"></canvas>
-          <h4>RAINBOW</h4>
-        </div>
-      </div>
-      <button type="button" class="btn-tetrio" onclick="closeSkinModal()">CONFIRM</button>
     </div>
   </div>
 
@@ -200,15 +95,35 @@
     let token = localStorage.getItem('jwtToken');
     let currentUser = localStorage.getItem('username');
     let socket = null;
-    let gameInterval = null;
-    let rainbowHue = 0;
-    let currentSkin = 'neon';
     let gameIdPromise = Promise.resolve(null);
-    let inputQueue = [];
 
-    let isMultiplayer = false;
+    // mode: 'idle' | 'single' | 'match'
+    let mode = 'idle';
     let isMatchmaking = false;
-    let selectedMode = 'shared';
+    let opponentName = '';
+    let opponentBoard = null;
+    let matchEndsAt = 0;
+    let lastBoardSentAt = 0;
+    let boardMessage = { text: '', sub: '' };
+
+    const BOARD_SEND_INTERVAL_MS = 100;
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const oppCanvas = document.getElementById('opponentCanvas');
+    const oppCtx = oppCanvas.getContext('2d');
+
+    const game = new PlanetGame({
+      onGameOver: (score) => {
+        if (mode === 'single') {
+          boardMessage = { text: 'GAME OVER', sub: `SCORE ${score} · SINGLEPLAYER를 눌러 다시 시작` };
+          submitScore(score);
+        } else if (mode === 'match') {
+          boardMessage = { text: 'GAME OVER', sub: '상대 결과를 기다리는 중...' };
+          sendBoard(true);
+        }
+      }
+    });
 
     window.onload = async () => {
       initTheme();
@@ -224,23 +139,26 @@
       }
     };
 
+    // ---------- 테마 / 설정 ----------
+
     function initTheme() {
       const savedTheme = localStorage.getItem('theme') || 'dark';
       setTheme(savedTheme);
     }
 
-    function setTheme(mode) {
-      if (mode === 'light') {
+    function isLightMode() {
+      return document.body.classList.contains('light-mode');
+    }
+
+    function setTheme(themeMode) {
+      if (themeMode === 'light') {
         document.body.classList.add('light-mode');
       } else {
         document.body.classList.remove('light-mode');
       }
-      localStorage.setItem('theme', mode);
+      localStorage.setItem('theme', themeMode);
       updateThemeButtons();
-      
-      if (typeof drawGame === 'function' && snake.length > 0 && !isMultiplayer) {
-        drawGame();
-      }
+      PlanetGame.drawPlanetChain(document.getElementById('planetChain').getContext('2d'), isLightMode());
     }
 
     function updateThemeButtons() {
@@ -267,6 +185,8 @@
     function closeSettingsModal() {
       document.getElementById('settingsModal').style.display = 'none';
     }
+
+    // ---------- 로그인 / 통계 ----------
 
     async function fetchGlobalStats() {
       try {
@@ -398,250 +318,28 @@
       }
     }
 
-    function showCountdownUI(count) {
-      const overlayContainer = document.getElementById('canvasOverlayContainer');
-      if (overlayContainer) {
-        if (count === 'START') {
-          overlayContainer.innerHTML = `<div class="countdown-overlay" style="color: #00ff00;">GO!</div>`;
-          setTimeout(() => {
-            overlayContainer.innerHTML = '';
-          }, 800);
-        } else {
-          overlayContainer.innerHTML = `<div class="countdown-overlay">${count}</div>`;
-        }
-      }
+    function setStatus(text) {
+      const el = document.getElementById('gameStatus');
+      if (el.innerText !== text) el.innerText = text;
     }
 
-    function setOpponentBoxVisible(visible) {
-      const oppBox = document.getElementById('opponentBox');
-      const layoutContainer = document.getElementById('layoutContainer');
-      
-      if (visible) {
-        layoutContainer.classList.add('dual-mode');
-        oppBox.classList.add('active');
-      } else {
-        layoutContainer.classList.remove('dual-mode');
-        oppBox.classList.remove('active');
-      }
-    }
-
-    function initSocket() {
-      if (socket) return;
-      socket = io({ auth: { token } });
-
-      socket.on('connect_error', (err) => {
-        if (err.message === 'unauthorized') {
-          alert('로그인이 만료되었습니다. 다시 로그인하세요.');
-          logout();
-        }
-      });
-
-      socket.on('waiting', (data) => {
-        document.getElementById('gameStatus').innerText = data?.message || '상대를 찾는 중입니다...';
-      });
-
-      socket.on('countdownTick', (data) => {
-        showCountdownUI(data.count); 
-      });
-
-      socket.on('matchFound', (data) => {
-        isMatchmaking = false;
-        isMultiplayer = true;
-        resetMatchmakingButtons();
-        document.getElementById('gameStatus').innerText = `매칭 완료! 상대: ${data.opponent}`;
-        if (gameInterval) clearInterval(gameInterval);
-
-        if (data.mode) selectedMode = data.mode;
-        setOpponentBoxVisible(selectedMode === 'individual');
-      });
-
-      socket.on('gameState', (state) => {
-        drawMultiplayerGame(state);
-      });
-
-      socket.on('matchOver', (data) => {
-        isMultiplayer = false;
-        setOpponentBoxVisible(false);
-        document.getElementById('canvasOverlayContainer').innerHTML = '';
-        document.getElementById('gameStatus').innerText = `게임 종료! 승자: ${data.winner}`;
-        fetchGlobalStats();
-        loadLeaderboard();
-      });
-    }
-
-    function openMatchModal() {
-      if (isMatchmaking) {
-        joinMatchmaking(selectedMode);
-        return;
-      }
-      document.getElementById('matchModal').style.display = 'flex';
-    }
-
-    function closeMatchModal() {
-      document.getElementById('matchModal').style.display = 'none';
-    }
-
-    function selectMatchMode(mode) {
-      closeMatchModal();
-      joinMatchmaking(mode);
-    }
-
-    function resetMatchmakingButtons() {
-      const btn = document.getElementById('btnMatchmaking');
-      if (btn) btn.innerText = '1 VS 1';
-    }
-
-    function joinMatchmaking(mode = 'shared') {
-      if (!token || !currentUser) return alert('로그인이 필요합니다.');
-
-      initSocket();
-
-      if (isMatchmaking && selectedMode === mode) {
-        socket.emit('cancelQueue');
-        isMatchmaking = false;
-        resetMatchmakingButtons();
-        document.getElementById('gameStatus').innerText = '매칭이 취소되었습니다.';
-      } else {
-        if (gameInterval) clearInterval(gameInterval);
-        isMultiplayer = false;
-        isMatchmaking = true;
-        selectedMode = mode;
-        
-        document.getElementById('btnMatchmaking').innerText = 'CANCEL MATCH';
-        document.getElementById('gameStatus').innerText = `[${mode.toUpperCase()}] 상대를 찾는 중...`;
-
-        socket.emit('joinQueue', { mode });
-      }
-    }
-
-    function getHtmlTagForIndex(index, length) {
-      if (index === 0) return '<head>';
-      if (index === 1) return '</head>';
-      if (index === 2) return '<body>';
-      if (index === length - 1) return '</body>';
-      if (length >= 6 && index === length - 2) return '</div>';
-      return '<div>';
-    }
-
-    function openSkinModal() {
-      document.getElementById('skinModal').style.display = 'flex';
-      updateSkinCardSelection();
-      renderSkinPreviews();
-    }
-
-    function closeSkinModal() {
-      document.getElementById('skinModal').style.display = 'none';
-    }
-
-    function selectSkin(skinName) {
-      currentSkin = skinName;
-      updateSkinCardSelection();
-    }
-
-    function updateSkinCardSelection() {
-      ['neon', 'html', 'rainbow'].forEach(skin => {
-        const card = document.getElementById(`card-${skin}`);
-        if (skin === currentSkin) card.classList.add('selected');
-        else card.classList.remove('selected');
-      });
-    }
-
-    function renderSkinPreviews() {
-      const isLight = document.body.classList.contains('light-mode');
-
-      ['neon', 'html', 'rainbow'].forEach(skin => {
-        const cvs = document.getElementById(`prev-${skin}`);
-        const pctx = cvs.getContext('2d');
-        
-        pctx.fillStyle = isLight ? '#ffffff' : '#000000';
-        pctx.fillRect(0, 0, 100, 100);
-
-        const dummySnake = [
-          {x: 2, y: 1},
-          {x: 2, y: 2},
-          {x: 2, y: 3},
-          {x: 2, y: 4}
-        ];
-        const size = 20;
-
-        if (skin === 'html') {
-          const bgBoxColor = isLight ? '#f0f0f0' : '#0a0a0a';
-          const textColor = isLight ? '#0451a5' : '#00ff00';
-          const borderColor = isLight ? '#d4d4d4' : '#2d2d2d';
-
-          dummySnake.forEach((part) => {
-            pctx.fillStyle = bgBoxColor;
-            pctx.fillRect(part.x * size, part.y * size, size - 1, size - 1);
-            pctx.strokeStyle = borderColor;
-            pctx.strokeRect(part.x * size, part.y * size, size - 1, size - 1);
-          });
-
-          dummySnake.forEach((part, idx) => {
-            pctx.fillStyle = textColor;
-            pctx.font = 'bold 11px monospace';
-            pctx.textAlign = 'center';
-            pctx.textBaseline = 'middle';
-            const tag = getHtmlTagForIndex(idx, dummySnake.length);
-            pctx.fillText(tag, part.x * size + size / 2, part.y * size + size / 2);
-          });
-        } else {
-          dummySnake.forEach((part, idx) => {
-            const x = part.x * size;
-            const y = part.y * size;
-            if (skin === 'rainbow') {
-              pctx.fillStyle = `hsl(${idx * 40}, 100%, 50%)`;
-              pctx.fillRect(x, y, size - 1, size - 1);
-            } else {
-              pctx.fillStyle = idx === 0 ? '#00f0ff' : '#00a3cc';
-              pctx.fillRect(x, y, size - 2, size - 2);
-            }
-          });
-        }
-      });
-    }
-
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const oppCanvas = document.getElementById('opponentCanvas');
-    const oppCtx = oppCanvas.getContext('2d');
-
-    const gridSize = 20;
-    const tileCount = 40;
-    let snake = [];
-    let food = {x: 5, y: 5};
-    let dx = 1, dy = 0;
-    let score = 0;
-
-    function generateFood() {
-      let newFood;
-      do {
-        newFood = {
-          x: Math.floor(Math.random() * tileCount),
-          y: Math.floor(Math.random() * tileCount)
-        };
-      } while (snake.some(part => part.x === newFood.x && part.y === newFood.y));
-      return newFood;
-    }
+    // ---------- 싱글플레이 ----------
 
     function startSingleGame() {
-      if (gameInterval) clearInterval(gameInterval);
-      if (isMatchmaking && socket) {
-        socket.emit('cancelQueue');
-        isMatchmaking = false;
-        resetMatchmakingButtons();
+      if (mode === 'match') {
+        return alert('1대1 대결이 끝난 뒤에 시작할 수 있습니다.');
       }
-      isMultiplayer = false;
+      if (isMatchmaking) cancelMatchmaking();
+
+      mode = 'single';
+      boardMessage = { text: '', sub: '' };
       setOpponentBoxVisible(false);
       document.getElementById('canvasOverlayContainer').innerHTML = '';
-      
-      inputQueue = [];
-      snake = [
-        {x: 15, y: 15},
-        {x: 14, y: 15},
-        {x: 13, y: 15},
-        {x: 12, y: 15}
-      ];
-      dx = 1; dy = 0; score = 0;
+      setStatus('');
+
+      game.reset();
+      game.running = true;
+
       // 서버에 게임 시작을 알려 두어야 끝났을 때 점수가 인정된다
       gameIdPromise = fetch('/api/game/start', {
         method: 'POST',
@@ -650,207 +348,9 @@
         .then(res => res.ok ? res.json() : null)
         .then(data => data?.gameId || null)
         .catch(() => null);
-      food = generateFood();
-      document.getElementById('gameStatus').innerText = "";
-      
-      drawGame();
-      gameInterval = setInterval(gameLoop, 90);
     }
 
-    function gameLoop() {
-      if (inputQueue.length > 0) {
-        const nextDir = inputQueue.shift();
-        dx = nextDir.dx;
-        dy = nextDir.dy;
-      }
-
-      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-
-      if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
-        return gameOver();
-      }
-
-      const willEat = (head.x === food.x && head.y === food.y);
-      const collisionCheckBody = willEat ? snake : snake.slice(0, -1);
-
-      if (collisionCheckBody.some(part => part.x === head.x && part.y === head.y)) {
-        return gameOver();
-      }
-
-      snake.unshift(head);
-      if (willEat) {
-        score += 10;
-        food = generateFood();
-      } else {
-        snake.pop();
-      }
-
-      drawGame();
-    }
-
-    function drawGame() {
-      if (!snake || snake.length === 0) return;
-
-      const isLight = document.body.classList.contains('light-mode');
-
-      ctx.fillStyle = isLight ? '#ffffff' : '#000000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      rainbowHue = (rainbowHue + 4) % 360;
-
-      if (currentSkin === 'html') {
-        const bgBoxColor = isLight ? '#f0f0f0' : '#0a0a0a';
-        const textColor = isLight ? '#0451a5' : '#00ff00';
-        const borderColor = isLight ? '#e0e0e0' : '#2d2d2d';
-
-        snake.forEach((part) => {
-          const x = part.x * gridSize;
-          const y = part.y * gridSize;
-          ctx.fillStyle = bgBoxColor;
-          ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
-          ctx.strokeStyle = borderColor;
-          ctx.strokeRect(x, y, gridSize - 1, gridSize - 1);
-        });
-
-        snake.forEach((part, index) => {
-          const x = part.x * gridSize;
-          const y = part.y * gridSize;
-          ctx.fillStyle = textColor;
-          ctx.font = 'bold 11px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
-          const tag = getHtmlTagForIndex(index, snake.length);
-          ctx.fillText(tag, x + gridSize / 2, y + gridSize / 2);
-        });
-      } else {
-        snake.forEach((part, index) => {
-          const x = part.x * gridSize;
-          const y = part.y * gridSize;
-
-          if (currentSkin === 'rainbow') {
-            const hue = (rainbowHue + index * 12) % 360;
-            ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-            ctx.fillRect(x, y, gridSize - 1, gridSize - 1);
-          } else {
-            ctx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
-            ctx.fillRect(x, y, gridSize - 2, gridSize - 2);
-          }
-        });
-      }
-
-      const fx = food.x * gridSize;
-      const fy = food.y * gridSize;
-
-      if (currentSkin === 'html') {
-        if (isLight) {
-          ctx.fillStyle = '#fff1f0';
-          ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
-          ctx.strokeStyle = '#ffa39e';
-          ctx.strokeRect(fx, fy, gridSize - 1, gridSize - 1);
-
-          ctx.fillStyle = '#cf1322';
-          ctx.font = '900 13px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
-        } else {
-          ctx.fillStyle = '#ff0055';
-          ctx.fillRect(fx, fy, gridSize - 1, gridSize - 1);
-
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '900 13px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('<bug>', fx + gridSize / 2, fy + gridSize / 2);
-        }
-      } else {
-        ctx.fillStyle = '#ff0055';
-        ctx.fillRect(fx, fy, gridSize - 2, gridSize - 2);
-      }
-    }
-
-    // 1대1 전용 스네이크 렌더링 (선택된 스킨과 무관하게 나: 파란색, 상대: 주황색 고정)
-    function drawMultiSnake(targetCtx, snakeArray, size, isMe) {
-      snakeArray.forEach((part, index) => {
-        const x = part.x * size;
-        const y = part.y * size;
-        if (isMe) {
-          targetCtx.fillStyle = index === 0 ? '#00f0ff' : '#00a3cc';
-        } else {
-          targetCtx.fillStyle = index === 0 ? '#ffaa00' : '#cc8800';
-        }
-        targetCtx.fillRect(x, y, size - 2, size - 2);
-      });
-    }
-
-    // 1대1 전용 먹이 렌더링 (스킨 무관하게 기본 고정)
-    function drawMultiFood(targetCtx, foodObj, size) {
-      const fx = foodObj.x * size;
-      const fy = foodObj.y * size;
-      targetCtx.fillStyle = '#ff0055';
-      targetCtx.fillRect(fx, fy, size - 2, size - 2);
-    }
-
-    function drawMultiplayerGame(state) {
-      if (!state) return;
-      const isLight = document.body.classList.contains('light-mode');
-
-      const players = Array.isArray(state.players)
-        ? state.players
-        : (state.players ? Object.values(state.players) : []);
-
-      const currentMode = state.mode || selectedMode;
-
-      const myPlayer = players.find(p => p.username === currentUser || p.id === socket?.id) || players[0];
-      const opponentPlayer = players.find(p => p !== myPlayer) || players[1];
-
-      if (currentMode === 'shared') {
-        setOpponentBoxVisible(false);
-
-        ctx.fillStyle = isLight ? '#ffffff' : '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        if (state.food) {
-          drawMultiFood(ctx, state.food, gridSize);
-        }
-
-        players.forEach((player) => {
-          const isMe = (player === myPlayer);
-          if (player.snake && Array.isArray(player.snake)) {
-            drawMultiSnake(ctx, player.snake, gridSize, isMe);
-          }
-        });
-      } else if (currentMode === 'individual') {
-        setOpponentBoxVisible(true);
-
-        ctx.fillStyle = isLight ? '#ffffff' : '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const myFood = myPlayer?.food || state.food;
-        if (myFood) drawMultiFood(ctx, myFood, gridSize);
-
-        if (myPlayer && myPlayer.snake && Array.isArray(myPlayer.snake)) {
-          drawMultiSnake(ctx, myPlayer.snake, gridSize, true);
-        }
-
-        const subGridSize = gridSize / 2;
-        oppCtx.fillStyle = isLight ? '#f0f0f0' : '#111111';
-        oppCtx.fillRect(0, 0, oppCanvas.width, oppCanvas.height);
-
-        const oppFood = opponentPlayer?.food || state.food;
-        if (oppFood) drawMultiFood(oppCtx, oppFood, subGridSize);
-
-        if (opponentPlayer && opponentPlayer.snake && Array.isArray(opponentPlayer.snake)) {
-          drawMultiSnake(oppCtx, opponentPlayer.snake, subGridSize, false);
-        }
-      }
-    }
-
-    async function gameOver() {
-      clearInterval(gameInterval);
-      document.getElementById('gameStatus').innerText = `GAME OVER! SCORE: ${score}`;
-      
+    async function submitScore(score) {
       try {
         const gameId = await gameIdPromise;
         const res = await fetch('/api/score', {
@@ -877,28 +377,232 @@
       fetchGlobalStats();
     }
 
-    document.addEventListener('keydown', (e) => {
-      const key = e.key.toLowerCase();
-      let newDir = null;
+    // ---------- 1대1 점수 대결 ----------
 
-      if (e.key === 'ArrowUp' || key === 'w') newDir = { dx: 0, dy: -1 };
-      if (e.key === 'ArrowDown' || key === 's') newDir = { dx: 0, dy: 1 };
-      if (e.key === 'ArrowLeft' || key === 'a') newDir = { dx: -1, dy: 0 };
-      if (e.key === 'ArrowRight' || key === 'd') newDir = { dx: 1, dy: 0 };
+    function setOpponentBoxVisible(visible) {
+      document.getElementById('layoutContainer').classList.toggle('dual-mode', visible);
+      document.getElementById('opponentBox').classList.toggle('active', visible);
+    }
 
-      if (newDir) {
-        if (isMultiplayer && socket) {
-          socket.emit('playerInput', newDir);
-        } else {
-          const lastDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
-          if (newDir.dx !== -lastDir.dx || newDir.dy !== -lastDir.dy) {
-            if (inputQueue.length < 2) {
-              inputQueue.push(newDir);
-            }
-          }
+    function showCountdownUI(count) {
+      const overlay = document.getElementById('canvasOverlayContainer');
+      if (count === 'START') {
+        overlay.innerHTML = '<div class="countdown-overlay" style="color: #00ff88;">GO!</div>';
+        setTimeout(() => { overlay.innerHTML = ''; }, 800);
+      } else {
+        overlay.innerHTML = `<div class="countdown-overlay">${Number(count)}</div>`;
+      }
+    }
+
+    function initSocket() {
+      if (socket) return;
+      socket = io({ auth: { token } });
+
+      socket.on('connect_error', (err) => {
+        if (err.message === 'unauthorized') {
+          alert('로그인이 만료되었습니다. 다시 로그인하세요.');
+          logout();
         }
+      });
+
+      socket.on('waiting', (data) => {
+        setStatus(data?.message || '상대를 찾는 중입니다...');
+      });
+
+      socket.on('matchFound', (data) => {
+        isMatchmaking = false;
+        resetMatchmakingButton();
+
+        mode = 'match';
+        opponentName = data.opponent;
+        opponentBoard = null;
+        matchEndsAt = 0;
+        boardMessage = { text: '', sub: '' };
+        game.reset();
+
+        document.getElementById('opponentTitle').textContent = opponentName;
+        setOpponentBoxVisible(true);
+        setStatus(`매칭 완료! 상대: ${opponentName}`);
+      });
+
+      socket.on('countdownTick', (data) => {
+        showCountdownUI(data.count);
+        if (data.count === 'START' && mode === 'match') {
+          matchEndsAt = Date.now() + data.remainingMs;
+          game.running = true;
+        }
+      });
+
+      socket.on('opponentBoard', (board) => {
+        opponentBoard = board;
+        document.getElementById('opponentTitle').textContent = `${opponentName} · ${board.s}`;
+      });
+
+      socket.on('matchOver', (data) => {
+        if (!game.over) game.running = false;
+        mode = 'idle';
+        matchEndsAt = 0;
+        document.getElementById('canvasOverlayContainer').innerHTML = '';
+
+        const reasons = {
+          opponent_left: ' (상대가 나감)',
+          time_up: ' (시간 종료)'
+        };
+        const isWin = data.winner === currentUser;
+        const isDraw = data.winner === 'DRAW';
+        const scoreText = (data.scores || []).map(s => `${s.username} ${s.score}`).join(' : ');
+
+        boardMessage = {
+          text: isDraw ? 'DRAW' : (isWin ? 'YOU WIN!' : 'YOU LOSE'),
+          sub: scoreText
+        };
+        setStatus(`게임 종료! 승자: ${isDraw ? '무승부' : data.winner}${reasons[data.reason] || ''}`);
+
+        fetchGlobalStats();
+        loadLeaderboard();
+      });
+    }
+
+    function resetMatchmakingButton() {
+      document.getElementById('btnMatchmaking').innerText = '1 VS 1';
+    }
+
+    function cancelMatchmaking() {
+      if (socket) socket.emit('cancelQueue');
+      isMatchmaking = false;
+      resetMatchmakingButton();
+      setStatus('매칭이 취소되었습니다.');
+    }
+
+    function toggleMatchmaking() {
+      if (!token || !currentUser) return alert('로그인이 필요합니다.');
+      if (mode === 'match') return alert('이미 대결 중입니다.');
+      if (isMatchmaking) return cancelMatchmaking();
+
+      if (mode === 'single' && game.playing) {
+        if (!confirm('진행 중인 게임을 그만두고 1대1 매칭을 시작할까요?')) return;
+      }
+
+      initSocket();
+      mode = 'idle';
+      game.reset();
+      boardMessage = { text: '', sub: '' };
+      setOpponentBoxVisible(false);
+
+      isMatchmaking = true;
+      document.getElementById('btnMatchmaking').innerText = 'CANCEL MATCH';
+      setStatus('상대를 찾는 중...');
+      socket.emit('joinQueue');
+    }
+
+    function sendBoard(force = false) {
+      const now = Date.now();
+      if (!socket || (!force && now - lastBoardSentAt < BOARD_SEND_INTERVAL_MS)) return;
+      lastBoardSentAt = now;
+      socket.emit('boardUpdate', game.snapshot());
+    }
+
+    function updateMatchStatus() {
+      if (!matchEndsAt) return;
+      const remaining = Math.max(0, Math.ceil((matchEndsAt - Date.now()) / 1000));
+      const time = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
+      const oppScore = opponentBoard ? opponentBoard.s : 0;
+      setStatus(`남은 시간 ${time} · 나 ${game.score} : ${oppScore} ${opponentName}`);
+    }
+
+    // ---------- 입력 ----------
+
+    function canvasPoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!game.playing) return;
+      const p = canvasPoint(e);
+      game.aimAt(p.x, p.y);
+    });
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!game.playing) return;
+      const p = canvasPoint(e);
+      game.aimAt(p.x, p.y);
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      if (!game.playing) return;
+      const p = canvasPoint(e);
+      game.aimAt(p.x, p.y);
+      game.launch();
+    });
+
+    const heldKeys = new Set();
+
+    function updateAimDir() {
+      const right = heldKeys.has('arrowright') || heldKeys.has('d');
+      const left = heldKeys.has('arrowleft') || heldKeys.has('a');
+      game.aimDir = (right ? 1 : 0) - (left ? 1 : 0);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || !game.playing) return;
+      const key = e.key.toLowerCase();
+
+      if (['arrowleft', 'arrowright', 'a', 'd'].includes(key)) {
+        heldKeys.add(key);
+        updateAimDir();
+        e.preventDefault();
+      } else if ([' ', 'enter', 'arrowup', 'w'].includes(key)) {
+        if (!e.repeat) game.launch();
+        e.preventDefault();
       }
     });
+
+    document.addEventListener('keyup', (e) => {
+      heldKeys.delete(e.key.toLowerCase());
+      updateAimDir();
+    });
+
+    window.addEventListener('blur', () => {
+      heldKeys.clear();
+      updateAimDir();
+    });
+
+    // ---------- 화면 그리기 ----------
+
+    let lastFrameAt = performance.now();
+
+    function loop(now) {
+      const dt = Math.min((now - lastFrameAt) / 1000, 0.1);
+      lastFrameAt = now;
+
+      game.frame(dt);
+
+      const isLight = isLightMode();
+      const message = boardMessage.text
+        ? boardMessage
+        : (mode === 'idle' && !isMatchmaking ? { text: '우주', sub: 'SINGLEPLAYER 또는 1 VS 1을 눌러 시작' } : { text: '', sub: '' });
+      PlanetGame.drawBoard(ctx, game.view(), { isLight, message: message.text, subMessage: message.sub });
+
+      if (mode === 'match') {
+        if (game.playing) sendBoard();
+        updateMatchStatus();
+      }
+
+      if (document.getElementById('opponentBox').classList.contains('active')) {
+        const view = opponentBoard
+          ? { bodies: opponentBoard.b, angle: opponentBoard.a, currentTier: opponentBoard.c, showLauncher: !opponentBoard.o, ready: true, score: opponentBoard.s }
+          : { bodies: [], showLauncher: false, score: 0 };
+        PlanetGame.drawBoard(oppCtx, view, { isLight, hud: false, message: opponentBoard?.o ? 'GAME OVER' : '' });
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
   </script>
 </body>
 </html>

@@ -249,8 +249,9 @@ canvas#gameCanvas {
   height: 800px;
   max-width: 78vh;
   max-height: 78vh;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
 }
 
 body.light-mode canvas#gameCanvas {
@@ -290,15 +291,18 @@ body.light-mode canvas#gameCanvas {
 #opponentCanvas {
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
+  width: 400px;
+  max-width: 39vh;
 }
 
 /* 캔버스 중앙 카운트다운 오버레이 */
+.canvas-wrap {
+  position: relative;
+}
+
 .canvas-overlay-container {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 800px;
-  height: 800px;
+  inset: 0;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -350,6 +354,22 @@ li {
   font-size: 0.9rem;
 }
 
+.leaderboard-box .chain-title {
+  margin-top: 25px;
+}
+
+#planetChain {
+  display: block;
+  margin: 0 auto;
+}
+
+.help-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: -8px 0 15px;
+}
+
 .modal-overlay {
   display: none;
   position: fixed;
@@ -379,55 +399,6 @@ li {
   text-transform: uppercase;
   border-bottom: 2px solid var(--text-black);
   padding-bottom: 10px;
-}
-
-.mode-select-box {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  margin: 20px 0;
-}
-
-.skin-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin-bottom: 25px;
-}
-
-.skin-card {
-  background: var(--card-bg);
-  border: 3px solid var(--card-border);
-  padding: 15px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.skin-card:hover, .skin-card.selected {
-  border-color: var(--text-black);
-  transform: translateY(-2px);
-}
-
-.skin-card.selected {
-  background: #e8e8e8;
-}
-
-body.light-mode .skin-card.selected {
-  background: #d5d5d5;
-}
-
-.skin-card h4 {
-  font-size: 0.90rem;
-  font-weight: 800;
-  margin-top: 10px;
-}
-
-.skin-preview-canvas {
-  background: #000000;
-  border: 1px solid #444444;
-  margin: 0 auto;
-  display: block;
 }
 
 .setting-row {
