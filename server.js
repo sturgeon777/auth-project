@@ -282,10 +282,16 @@ app.post('/api/score', requireAuth, (req, res) => {
 
 // ---------- 1대1 점수 대결 (Socket.io) ----------
 // 각자 자기 판을 브라우저에서 플레이하고, 서버는 판 정보를 상대에게 전달하면서 점수와 시간을 관리한다.
+// 승리 조건: 먼저 태양을 만든 사람. 아무도 못 만들면 점수가 높은 사람.
 
-const MATCH_DURATION_MS = 2 * 60 * 1000;
+// 완벽하게 플레이해도 태양까지 1분 30초 가까이 걸려서 여유 있게 잡는다
+const MATCH_DURATION_MS = 5 * 60 * 1000;
 const MAX_BOARD_BODIES = 200;
 const PLANET_TIERS = 10;
+const SUN_TIER = PLANET_TIERS - 1;
+// 발사할 수 있는 가장 큰 행성은 지구(4단계)라서, 태양을 만들려면 최소한 해왕성(5단계)부터 태양까지는
+// 직접 합쳐야 한다. 그때 얻는 점수의 합(849점)보다 낮은 점수로 태양을 만들었다고 하면 조작으로 본다
+const MIN_SUN_SCORE = [5, 6, 7, 8, 9].reduce((sum, tier) => sum + 2 ** (SUN_TIER - tier) * (tier + 1) * (tier + 2) / 2, 0);
 
 let waitingQueue = [];
 const matches = new Map(); // roomId -> match
@@ -388,7 +394,8 @@ function sanitizeBoard(data) {
     a: Number.isFinite(data.a) ? Math.round(data.a * 100) / 100 : 0,
     c: Number.isInteger(data.c) && data.c >= 0 && data.c < PLANET_TIERS ? data.c : 0,
     s: Number.isInteger(data.s) ? data.s : 0,
-    o: data.o === true
+    o: data.o === true,
+    u: data.u === true
   };
 }
 
@@ -408,8 +415,15 @@ function handleBoardUpdate(socket, data) {
   }
   player.score = board.s;
   if (board.o) player.over = true;
+  if (board.u && player.score < MIN_SUN_SCORE) board.u = false;
 
   socket.to(match.roomId).emit('opponentBoard', board);
+
+  // 먼저 태양을 만든 사람이 바로 이긴다
+  if (board.u) {
+    finishMatch(match, 'sun', player.username);
+    return;
+  }
   checkMatchEnd(match);
 }
 

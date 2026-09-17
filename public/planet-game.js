@@ -1,5 +1,5 @@
 // 행성 합치기 게임 엔진 (물리 계산 + 그리기)
-// 좌표는 모두 800x800 기준이고, 작은 캔버스에는 비율에 맞춰 줄여서 그린다.
+// 좌표는 모두 게임 공간(SIZE x SIZE) 기준이고, 캔버스 크기에 맞춰 줄여서 그린다.
 (function (global) {
   'use strict';
 
@@ -20,17 +20,19 @@
   const STEP = 1 / 60;
   const SUBSTEPS = 8;
 
+  // 단계마다 약 1.19배씩 커진다. 이보다 가파르면 목성~달을 한 줄로 쌓았을 때 원 안에 다 들어가지 않아
+  // 태양을 만들 수 없게 된다 (1.21배 63%, 1.25배 0% / 1.19배 97%, 시뮬레이션 기준)
   const PLANETS = [
     { name: '달', r: 32, colors: ['#f2f2f2', '#9a9a9a'], craters: true },
-    { name: '수성', r: 44, colors: ['#e0cdb3', '#8c7355'], craters: true },
-    { name: '화성', r: 57, colors: ['#ff9b6e', '#b5381b'] },
-    { name: '금성', r: 72, colors: ['#ffe8a8', '#d99a2b'] },
-    { name: '지구', r: 90, colors: ['#7fd0ff', '#1e5fbf'], land: true },
-    { name: '해왕성', r: 111, colors: ['#8db0ff', '#2b3fa8'] },
-    { name: '천왕성', r: 135, colors: ['#c6f6f3', '#4fb3b0'] },
-    { name: '토성', r: 162, colors: ['#f7e3b5', '#b8914a'], ring: true },
-    { name: '목성', r: 198, colors: ['#f3d2a8', '#a0643a'], bands: true },
-    { name: '태양', r: 240, colors: ['#fff8b8', '#ff9d00'], glow: true }
+    { name: '수성', r: 38, colors: ['#e0cdb3', '#8c7355'], craters: true },
+    { name: '화성', r: 45, colors: ['#ff9b6e', '#b5381b'] },
+    { name: '금성', r: 54, colors: ['#ffe8a8', '#d99a2b'] },
+    { name: '지구', r: 64, colors: ['#7fd0ff', '#1e5fbf'], land: true },
+    { name: '해왕성', r: 76, colors: ['#8db0ff', '#2b3fa8'] },
+    { name: '천왕성', r: 91, colors: ['#c6f6f3', '#4fb3b0'] },
+    { name: '토성', r: 108, colors: ['#f7e3b5', '#b8914a'], ring: true },
+    { name: '목성', r: 129, colors: ['#f3d2a8', '#a0643a'], bands: true },
+    { name: '태양', r: 153, colors: ['#fff8b8', '#ff9d00'], glow: true }
   ];
   const SPAWN_WEIGHTS = [40, 30, 17, 9, 4]; // 발사할 수 있는 행성은 달~지구, 작은 행성일수록 자주 나온다
   const SUN_BONUS = 100;                     // 태양 두 개가 합쳐져 사라질 때 점수
@@ -58,9 +60,10 @@
   })();
 
   class PlanetGame {
-    constructor({ onScoreChange, onGameOver } = {}) {
+    constructor({ onScoreChange, onGameOver, onSun } = {}) {
       this.onScoreChange = onScoreChange || (() => {});
       this.onGameOver = onGameOver || (() => {});
+      this.onSun = onSun || (() => {});
       this.aimDir = 0;
       this.reset();
     }
@@ -78,6 +81,7 @@
       this.danger = 0;
       this.over = false;
       this.running = false;
+      this.sunReached = false;
     }
 
     get playing() {
@@ -228,6 +232,11 @@
       b.dead = true;
       this.effects.push({ x, y, r: PLANETS[a.tier].r, t: 0, color: '255, 255, 255' });
       this.addScore(mergePoints(a.tier));
+
+      if (a.tier === PLANETS.length - 1 && !this.sunReached) {
+        this.sunReached = true;
+        this.onSun(this.time);
+      }
     }
 
     checkBounds(dt) {
@@ -270,7 +279,8 @@
         a: Math.round(this.angle * 100) / 100,
         c: this.currentTier,
         s: this.score,
-        o: this.over
+        o: this.over,
+        u: this.sunReached
       };
     }
 

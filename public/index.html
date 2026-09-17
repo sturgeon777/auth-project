@@ -121,6 +121,14 @@
           boardMessage = { text: 'GAME OVER', sub: '상대 결과를 기다리는 중...' };
           sendBoard(true);
         }
+      },
+      onSun: () => {
+        if (mode === 'match') {
+          // 먼저 도착한 사람이 이기므로 기다리지 않고 바로 보낸다
+          sendBoard(true);
+        } else if (mode === 'single') {
+          setStatus('태양을 만들었어요! 계속해서 점수를 올려 보세요');
+        }
       }
     });
 
@@ -421,7 +429,7 @@
 
         document.getElementById('opponentTitle').textContent = opponentName;
         setOpponentBoxVisible(true);
-        setStatus(`매칭 완료! 상대: ${opponentName}`);
+        setStatus(`매칭 완료! 상대: ${opponentName} · 먼저 태양을 만들면 승리`);
       });
 
       socket.on('countdownTick', (data) => {
@@ -434,7 +442,7 @@
 
       socket.on('opponentBoard', (board) => {
         opponentBoard = board;
-        document.getElementById('opponentTitle').textContent = `${opponentName} · ${board.s}`;
+        document.getElementById('opponentTitle').textContent = `${opponentName} · ${board.s}${board.u ? ' · 태양!' : ''}`;
       });
 
       socket.on('matchOver', (data) => {
@@ -444,6 +452,7 @@
         document.getElementById('canvasOverlayContainer').innerHTML = '';
 
         const reasons = {
+          sun: ' (태양 도달)',
           opponent_left: ' (상대가 나감)',
           time_up: ' (시간 종료)'
         };
