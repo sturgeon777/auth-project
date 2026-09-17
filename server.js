@@ -479,6 +479,8 @@ function recordMatch(match) {
 migratePlaintextPasswords();
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// 외부에서는 Nginx(HTTPS)를 거쳐서만 들어오게, 같은 서버 안에서 오는 접속만 받는다
+const HOST = process.env.HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
 });

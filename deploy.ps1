@@ -38,7 +38,7 @@ $remote = @(
   'if ! git diff --quiet $before HEAD -- package.json package-lock.json; then npm install --omit=dev --no-audit --no-fund; fi',
   'pm2 restart auth-server --update-env',
   'sleep 2',
-  'curl -fsS http://localhost:3000/api/stats',
+  'curl -fsS http://127.0.0.1:3000/api/stats',
   'echo'
 ) -join '; '
 
