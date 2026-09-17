@@ -33,6 +33,12 @@ body.light-mode {
   user-select: none;
 }
 
+html,
+body {
+  /* 당겨서 새로고침, 끝에서 튕기는 효과 방지 */
+  overscroll-behavior: none;
+}
+
 body {
   background-color: var(--bg-black);
   color: var(--text-main);
@@ -250,8 +256,19 @@ canvas#gameCanvas {
   height: auto;
   aspect-ratio: 1;
   display: block;
-  touch-action: none;
+  /* 게임 중이 아닐 때는 게임판 위에서도 위아래 스크롤 가능 */
+  touch-action: pan-y;
   cursor: crosshair;
+  /* 길게 눌렀을 때 메뉴, 이미지 끌기, 선택 표시가 뜨지 않게 */
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas#gameCanvas.playing {
+  touch-action: none;
 }
 
 body.light-mode canvas#gameCanvas {

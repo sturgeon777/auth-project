@@ -554,6 +554,17 @@
       game.launch();
     });
 
+    // 폰 브라우저의 기본 터치 동작(스크롤, 확대, 길게 눌러 메뉴)이 조준을 가로채지 않게 막는다.
+    // CSS touch-action만으로는 일부 브라우저(특히 iOS Safari)에서 가끔 새어 나간다
+    ['touchstart', 'touchmove', 'touchend'].forEach((type) => {
+      canvas.addEventListener(type, (e) => {
+        if (game.playing && e.cancelable) e.preventDefault();
+      }, { passive: false });
+    });
+    ['contextmenu', 'dragstart', 'gesturestart'].forEach((type) => {
+      canvas.addEventListener(type, (e) => e.preventDefault());
+    });
+
     const heldKeys = new Set();
 
     function updateAimDir() {
@@ -595,6 +606,7 @@
       lastFrameAt = now;
 
       game.frame(dt);
+      canvas.classList.toggle('playing', game.playing);
 
       const isLight = isLightMode();
       const message = boardMessage.text
