@@ -267,7 +267,7 @@ app.post('/api/score', requireAuth, (req, res) => {
   singleGames.delete(gameId);
 
   const elapsedMs = Date.now() - game.startedAt;
-  if (!Number.isInteger(score) || score < 0 || score % 10 !== 0 || score > maxPlausibleScore(elapsedMs)) {
+  if (!Number.isInteger(score) || score < 0 || score > maxPlausibleScore(elapsedMs)) {
     return res.status(400).json({ message: '점수가 올바르지 않습니다.' });
   }
 
